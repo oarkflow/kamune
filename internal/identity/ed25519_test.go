@@ -7,7 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hossein1376/kamune/internal/identity"
+	"github.com/hossein1376/kamune/sign"
 )
+
+var _ sign.Identity = &identity.Ed25519{}
 
 func TestEd25519_SignVerify(t *testing.T) {
 	a := require.New(t)
@@ -23,26 +26,26 @@ func TestEd25519_SignVerify(t *testing.T) {
 	a.NotNil(sig)
 
 	t.Run("valid signature", func(t *testing.T) {
-		verified := identity.VerifyEd25519(pub, msg, sig)
-		a.True(verified)
+		_, err := identity.VerifyEd25519(pub, msg, sig)
+		a.NoError(err)
 	})
 	t.Run("invalid signature", func(t *testing.T) {
 		sig := slices.Clone(sig)
 		sig[0] ^= 0xFF
 
-		verified := identity.VerifyEd25519(pub, msg, sig)
-		a.False(verified)
+		_, err := identity.VerifyEd25519(pub, msg, sig)
+		a.Error(err)
 	})
 	t.Run("invalid hash", func(t *testing.T) {
 		msg = append(msg, []byte("!")...)
 
-		verified := identity.VerifyEd25519(pub, msg, sig)
-		a.False(verified)
+		_, err := identity.VerifyEd25519(pub, msg, sig)
+		a.Error(err)
 	})
 	t.Run("invalid public key", func(t *testing.T) {
 		another, err := identity.NewEd25519()
 		a.NoError(err)
-		verified := identity.VerifyEd25519(another.PublicKey, msg, sig)
-		a.False(verified)
+		_, err = identity.VerifyEd25519(another.PublicKey, msg, sig)
+		a.Error(err)
 	})
 }

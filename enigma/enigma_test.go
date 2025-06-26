@@ -19,6 +19,7 @@ func TestChaCha20Poly1305(t *testing.T) {
 	encrypted, err := eng.Encrypt(msg)
 	a.NoError(err)
 	a.NotNil(encrypted)
+	a.NotEqual(msg, encrypted)
 
 	decrypted, err := eng.Decrypt(encrypted)
 	a.NoError(err)

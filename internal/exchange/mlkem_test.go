@@ -13,14 +13,15 @@ func TestMLKEM(t *testing.T) {
 	p1, err := NewMLKEM()
 	a.NoError(err)
 	a.NotNil(p1)
-	pub := p1.PublicKey()
+	pub := p1.MarshalPublicKey()
 
 	// Peer2
-	s1, ct, err := MLKEMEncapsulate(pub)
+	s1, ct, err := EncapsulateMLKEM(pub)
 	a.NoError(err)
 	a.NotNil(ct)
 	a.NotNil(s1)
 
+	// Peer 1
 	s2, err := p1.Decapsulate(ct)
 	a.NoError(err)
 	a.NotNil(s2)

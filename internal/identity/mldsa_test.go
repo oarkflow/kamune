@@ -7,7 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hossein1376/kamune/internal/identity"
+	"github.com/hossein1376/kamune/sign"
 )
+
+var _ sign.Identity = &identity.MLDSA{}
 
 func TestMLDSA(t *testing.T) {
 	a := require.New(t)
@@ -23,26 +26,26 @@ func TestMLDSA(t *testing.T) {
 	a.NotNil(sig)
 
 	t.Run("valid signature", func(t *testing.T) {
-		verified := identity.VerifyMLDSA(pub, msg, sig)
-		a.True(verified)
+		_, err := identity.VerifyMLDSA(pub, msg, sig)
+		a.NoError(err)
 	})
 	t.Run("invalid signature", func(t *testing.T) {
 		sig := slices.Clone(sig)
 		sig[0] ^= 0xDD
 
-		verified := identity.VerifyMLDSA(pub, msg, sig)
-		a.False(verified)
+		_, err := identity.VerifyMLDSA(pub, msg, sig)
+		a.Error(err)
 	})
 	t.Run("invalid hash", func(t *testing.T) {
 		msg = append(msg, []byte("!")...)
 
-		verified := identity.VerifyMLDSA(pub, msg, sig)
-		a.False(verified)
+		_, err := identity.VerifyMLDSA(pub, msg, sig)
+		a.Error(err)
 	})
 	t.Run("invalid public key", func(t *testing.T) {
 		another, err := identity.NewMLDSA()
 		a.NoError(err)
-		verified := identity.VerifyMLDSA(another.PublicKey, msg, sig)
-		a.False(verified)
+		_, err = identity.VerifyMLDSA(another.PublicKey, msg, sig)
+		a.Error(err)
 	})
 }

@@ -1,14 +1,40 @@
 package identity
 
 import (
+	"crypto"
 	"crypto/x509"
 	"fmt"
 
 	"golang.org/x/crypto/ed25519"
+
+	"github.com/hossein1376/kamune/sign"
 )
 
-func VerifyEd25519(pub ed25519.PublicKey, msg, sig []byte) bool {
-	return ed25519.Verify(pub, msg, sig)
+func VerifyEd25519(remote crypto.PublicKey, msg, sig []byte) (crypto.PublicKey, error) {
+	switch r := remote.(type) {
+	case ed25519.PublicKey:
+		if ok := ed25519.Verify(r, msg, sig); !ok {
+			return nil, ErrInvalidSignature
+		}
+		return remote, nil
+
+	case []byte:
+		key, err := x509.ParsePKIXPublicKey(r)
+		if err != nil {
+			return nil, fmt.Errorf("parse public key: %w", err)
+		}
+		pub, ok := key.(ed25519.PublicKey)
+		if !ok {
+			return nil, ErrInvalidKey
+		}
+		if ok := ed25519.Verify(pub, msg, sig); !ok {
+			return nil, ErrInvalidSignature
+		}
+		return pub, nil
+
+	default:
+		return nil, ErrInvalidKey
+	}
 }
 
 type Ed25519 struct {
@@ -61,6 +87,10 @@ func (e *Ed25519) Load(path string) error {
 	*e = Ed25519{privateKey: private, PublicKey: public}
 
 	return nil
+}
+
+func (e *Ed25519) Verifier() sign.Verifier {
+	return VerifyEd25519
 }
 
 func NewEd25519() (*Ed25519, error) {

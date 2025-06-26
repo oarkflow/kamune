@@ -1,17 +1,15 @@
 package stp
 
 import (
-	"crypto/ecdh"
+	"crypto"
 	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net"
 
 	"github.com/hossein1376/kamune/enigma"
 	"github.com/hossein1376/kamune/internal/exchange"
-	"github.com/hossein1376/kamune/internal/identity"
+	"github.com/hossein1376/kamune/sign"
 )
 
 type Handshake struct {
@@ -20,130 +18,112 @@ type Handshake struct {
 	Salt      []byte `json:"salt,omitempty"`
 }
 
-func RequestHandshake(i *identity.Ed25519, c net.Conn) (*Transport, error) {
-	ec, err := exchange.NewECDH()
+func RequestHandshake(id sign.Identity, c net.Conn) (*Transport, error) {
+	ml, err := exchange.NewMLKEM()
 	if err != nil {
-		return nil, fmt.Errorf("new ecdh: %w", err)
+		return nil, fmt.Errorf("creating MLKEM: %v", err)
 	}
-	h := Handshake{
-		Identity:  i.MarshalPublicKey(),
-		PublicKey: ec.PublicKey(),
-	}
-	payload, err := seal(i, h)
-	if err != nil {
-		return nil, fmt.Errorf("seal: %w", err)
-	}
-	if _, err := c.Write(payload); err != nil {
-		return nil, fmt.Errorf("write: %w", err)
+	if _, err := c.Write(ml.MarshalPublicKey()); err != nil {
+		return nil, fmt.Errorf("write public key: %w", err)
 	}
 
-	resp, err := readMessage(c)
+	ct, err := read(c)
 	if err != nil {
-		return nil, fmt.Errorf("read handshake: %w", err)
+		return nil, fmt.Errorf("read ct: %w", err)
 	}
-	var st SignedTransport
-	if err := json.Unmarshal(resp, &st); err != nil {
-		return nil, fmt.Errorf("unmarshalling Transport: %w", err)
-	}
-	var handshakeResp Handshake
-	if err := json.Unmarshal(st.Message, &handshakeResp); err != nil {
-		return nil, fmt.Errorf("unmarshalling msg: %w", err)
-	}
-	id, err := x509.ParsePKIXPublicKey(handshakeResp.Identity)
+	secret, err := ml.Decapsulate(ct)
 	if err != nil {
-		return nil, fmt.Errorf("parse identity pubKey: %w", err)
+		return nil, fmt.Errorf("decapsulate: %w", err)
 	}
-	identifier, ok := id.(ed25519.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("identity does not implement ed25519.PublicKey")
+	aead, err := enigma.NewEnigma(secret, ct)
+	if err != nil {
+		return nil, fmt.Errorf("new aead: %w", err)
 	}
 
-	pub, err := x509.ParsePKIXPublicKey(handshakeResp.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("parse public pubKey: %w", err)
-	}
-	publicKey, ok := pub.(*ecdh.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("public pubKey does not implement *ecdh.PublicKey")
+	if err := encryptAndSendMyID(id, c, aead); err != nil {
+		return nil, fmt.Errorf("encrypt and send myID: %w", err)
 	}
 
-	secret, err := ec.Exchange(publicKey)
+	remote, err := readAndVerifyTheirID(id, c, aead)
 	if err != nil {
-		return nil, fmt.Errorf("ecdh exchange: %w", err)
-	}
-	eng, err := enigma.NewEnigma(secret, handshakeResp.Salt)
-	if err != nil {
-		return nil, fmt.Errorf("new enigma: %w", err)
+		return nil, fmt.Errorf("read and verify theirID: %w", err)
 	}
 
-	return newTransport(i, identifier, eng), nil
+	return newTransport(id, remote.(ed25519.PublicKey), aead), nil
 }
 
-func AcceptHandshake(i *identity.Ed25519, c net.Conn) (*Transport, error) {
-	payload, err := readMessage(c)
+func AcceptHandshake(id sign.Identity, c net.Conn) (*Transport, error) {
+	encKey, err := read(c)
 	if err != nil {
-		return nil, fmt.Errorf("read payload: %w", err)
+		return nil, fmt.Errorf("read encKey: %w", err)
+	}
+	secret, ct, err := exchange.EncapsulateMLKEM(encKey)
+	if err != nil {
+		return nil, fmt.Errorf("encapsulateMLKEM: %w", err)
+	}
+	aead, err := enigma.NewEnigma(secret, ct)
+	if err != nil {
+		return nil, fmt.Errorf("new aead: %w", err)
+	}
+	if _, err := c.Write(ct); err != nil {
+		return nil, fmt.Errorf("write ct: %w", err)
+	}
+
+	remote, err := readAndVerifyTheirID(id, c, aead)
+	if err != nil {
+		return nil, fmt.Errorf("read and verify theirID: %w", err)
+	}
+
+	if err := encryptAndSendMyID(id, c, aead); err != nil {
+		return nil, fmt.Errorf("encrypt and send myID: %w", err)
+	}
+
+	return newTransport(id, remote.(ed25519.PublicKey), aead), nil
+}
+
+func encryptAndSendMyID(
+	id sign.Identity, c net.Conn, aead *enigma.Enigma,
+) error {
+	myID, err := seal(id, id.MarshalPublicKey())
+	if err != nil {
+		return fmt.Errorf("seal myID: %w", err)
+	}
+	encryptedMyID, err := aead.Encrypt(myID)
+	if err != nil {
+		return fmt.Errorf("encrypt myID: %w", err)
+	}
+	if _, err := c.Write(encryptedMyID); err != nil {
+		return fmt.Errorf("write myID: %w", err)
+	}
+
+	return nil
+}
+
+func readAndVerifyTheirID(
+	id sign.Identity, c net.Conn, aead *enigma.Enigma,
+) (crypto.PublicKey, error) {
+	payload, err := read(c)
+	if err != nil {
+		return nil, fmt.Errorf("read theirID payload: %w", err)
+	}
+	decryptedTheirID, err := aead.Decrypt(payload)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt theirID: %w", err)
 	}
 	var st SignedTransport
-	if err := json.Unmarshal(payload, &st); err != nil {
-		return nil, fmt.Errorf("unmarshalling Transport: %w", err)
+	if err := json.Unmarshal(decryptedTheirID, &st); err != nil {
+		return nil, fmt.Errorf("unmarshalling transport: %w", err)
 	}
-	var h Handshake
-	if err := json.Unmarshal(st.Message, &h); err != nil {
-		return nil, fmt.Errorf("unmarshal handshake: %w", err)
+	var theirPubKey []byte
+	if err := json.Unmarshal(st.Message, &theirPubKey); err != nil {
+		return nil, fmt.Errorf("unmarshal their public key: %w", err)
+	}
+	remote, err := id.Verifier()(
+		theirPubKey, st.Message, st.Signature,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("verify theirID: %w", err)
 	}
 
-	id, err := x509.ParsePKIXPublicKey(h.Identity)
-	if err != nil {
-		return nil, fmt.Errorf("parse identity pubKey: %w", err)
-	}
-	identifier, ok := id.(ed25519.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("identity does not implement ed25519.PublicKey")
-	}
-
-	pub, err := x509.ParsePKIXPublicKey(h.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("parse public pubKey: %w", err)
-	}
-	publicKey, ok := pub.(*ecdh.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("public pubKey does not implement *ecdh.PublicKey")
-	}
-
-	if !identity.VerifyEd25519(identifier, st.Message, st.Signature) {
-		return nil, identity.ErrInvalidSignature
-	}
-
-	ec, err := exchange.NewECDH()
-	if err != nil {
-		return nil, fmt.Errorf("new ecdh key: %w", err)
-	}
-	secret, err := ec.Exchange(publicKey)
-	if err != nil {
-		return nil, fmt.Errorf("get ecdh secret: %w", err)
-	}
-	salt := make([]byte, 32)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, fmt.Errorf("generate salt: %w", err)
-	}
-	eng, err := enigma.NewEnigma(secret, salt)
-	if err != nil {
-		return nil, fmt.Errorf("new enigma: %w", err)
-	}
-
-	resp := Handshake{
-		Identity:  i.MarshalPublicKey(),
-		PublicKey: ec.PublicKey(),
-		Salt:      salt,
-	}
-	payload, err = seal(i, resp)
-	if err != nil {
-		return nil, fmt.Errorf("seal: %w", err)
-	}
-	if _, err := c.Write(payload); err != nil {
-		return nil, fmt.Errorf("write: %w", err)
-	}
-
-	return newTransport(i, identifier, eng), nil
+	return remote, nil
 }

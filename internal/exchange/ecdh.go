@@ -5,23 +5,38 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"fmt"
+
+	"github.com/hossein1376/kamune/internal/identity"
 )
 
 type ECDH struct {
-	publicKey  *ecdh.PublicKey
+	PublicKey  *ecdh.PublicKey
 	privateKey *ecdh.PrivateKey
 }
 
-func (e *ECDH) PublicKey() []byte {
-	b, err := x509.MarshalPKIXPublicKey(e.publicKey)
+func (e *ECDH) MarshalPublicKey() []byte {
+	b, err := x509.MarshalPKIXPublicKey(e.PublicKey)
 	if err != nil {
 		panic(fmt.Errorf("marshalling public key: %w", err))
 	}
 	return b
 }
 
-func (e *ECDH) Exchange(remote *ecdh.PublicKey) ([]byte, error) {
-	return e.privateKey.ECDH(remote)
+func (e *ECDH) Exchange(remote []byte) ([]byte, error) {
+	key, err := x509.ParsePKIXPublicKey(remote)
+	if err != nil {
+		return nil, fmt.Errorf("parsing key: %w", err)
+	}
+	pub, ok := key.(*ecdh.PublicKey)
+	if !ok {
+		return nil, identity.ErrInvalidKey
+	}
+	secret, err := e.privateKey.ECDH(pub)
+	if err != nil {
+		return nil, fmt.Errorf("performing ecdh exchange: %w", err)
+	}
+
+	return secret, nil
 }
 
 func NewECDH() (*ECDH, error) {
@@ -30,5 +45,5 @@ func NewECDH() (*ECDH, error) {
 		return nil, fmt.Errorf("ecdh: generating key: %w", err)
 	}
 
-	return &ECDH{privateKey: key, publicKey: key.PublicKey()}, nil
+	return &ECDH{privateKey: key, PublicKey: key.PublicKey()}, nil
 }

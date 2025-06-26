@@ -3,22 +3,19 @@ package enigma
 import (
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha512"
 	"errors"
 	"fmt"
+	"io"
 
-	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
-)
-
-const (
-	ArgonTime    = 2
-	ArgonMemory  = 64 * 1024
-	ArgonThreads = 4
-	ArgonKeyLen  = 32
+	"golang.org/x/crypto/hkdf"
 )
 
 var (
 	ErrInvalidCiphertext = errors.New("ciphertext is not valid")
+
+	hasher = sha512.New
 )
 
 type Enigma struct {
@@ -27,12 +24,15 @@ type Enigma struct {
 }
 
 func NewEnigma(secret, salt []byte) (*Enigma, error) {
-	key := argon2.IDKey(
-		secret, salt, ArgonTime, ArgonMemory, ArgonThreads, ArgonKeyLen,
-	)
+	salt = hasher().Sum(salt)
+	r := hkdf.New(hasher, secret, salt, nil)
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(r, key); err != nil {
+		return nil, fmt.Errorf("read key: %w", err)
+	}
 	aead, err := chacha20poly1305.NewX(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("xchacha20poly1305: %w", err)
 	}
 
 	return &Enigma{aead: aead, nonceSize: aead.NonceSize()}, nil

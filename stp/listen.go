@@ -24,14 +24,12 @@ func ListenAndServe(addr string) error {
 		conn, err := l.Accept()
 		if err != nil {
 			log.Fatalf("accept: %v", err)
-			continue
 		}
 		go func() {
 			defer conn.Close()
 			t, err := AcceptHandshake(id, conn)
 			if err != nil {
 				log.Fatalf("accept handshake: %v", err)
-				return
 			}
 			Chat(t, conn)
 		}()
