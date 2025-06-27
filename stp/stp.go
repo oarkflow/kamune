@@ -6,4 +6,5 @@ type SignedTransport struct {
 	Audience  string `json:"aud,omitempty"`
 	Message   []byte `json:"msg"`
 	Signature []byte `json:"sig"`
+	Timestamp Time   `json:"ts"`
 }

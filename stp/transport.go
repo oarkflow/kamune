@@ -13,16 +13,25 @@ import (
 	"github.com/hossein1376/kamune/sign"
 )
 
-const maxTransportSize = 10 * 1024
+const (
+	maxTransportSize = 10 * 1024
+	clockSkewSeconds = 10
+)
+
+var (
+	ErrInvalidTimestamp = errors.New("timestamp is out of range")
+)
 
 type Transport struct {
+	code     string
 	identity sign.Identity
 	remote   crypto.PublicKey
 	aead     *enigma.Enigma
+	conn     net.Conn
 }
 
-func (t Transport) Receive(c net.Conn, dst any) error {
-	payload, err := read(c)
+func (t *Transport) Receive(dst any) error {
+	payload, err := read(t.conn)
 	if err != nil {
 		return fmt.Errorf("read payload: %w", err)
 	}
@@ -34,7 +43,7 @@ func (t Transport) Receive(c net.Conn, dst any) error {
 	return open(t.remote, decrypted, dst)
 }
 
-func (t Transport) Send(c net.Conn, message any) error {
+func (t *Transport) Send(message any) error {
 	payload, err := seal(t.identity, message)
 	if err != nil {
 		return err
@@ -46,11 +55,19 @@ func (t Transport) Send(c net.Conn, message any) error {
 	if len(encrypted) > maxTransportSize {
 		return errors.New("data exceeds max size")
 	}
-	if _, err := c.Write(encrypted); err != nil {
+	if _, err := t.conn.Write(encrypted); err != nil {
 		return fmt.Errorf("writing: %w", err)
 	}
 
 	return nil
+}
+
+func (t *Transport) Close() error {
+	return t.conn.Close()
+}
+
+func (t *Transport) Code() string {
+	return t.code
 }
 
 func seal(id sign.Identity, message any) ([]byte, error) {
@@ -62,7 +79,7 @@ func seal(id sign.Identity, message any) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("signing: %w", err)
 	}
-	st := SignedTransport{Message: msg, Signature: sig}
+	st := SignedTransport{Message: msg, Signature: sig, Timestamp: Now()}
 	payload, err := json.Marshal(st)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling Transport: %w", err)
@@ -75,6 +92,9 @@ func open(remote crypto.PublicKey, payload []byte, dst any) error {
 	var st SignedTransport
 	if err := json.Unmarshal(payload, &st); err != nil {
 		return fmt.Errorf("unmarshalling Transport: %w", err)
+	}
+	if !st.Timestamp.IsInPlusMinusSeconds(clockSkewSeconds) {
+		return ErrInvalidTimestamp
 	}
 	msg := st.Message
 	if _, err := identity.VerifyEd25519(remote, msg, st.Signature); err != nil {
@@ -97,11 +117,17 @@ func read(c net.Conn) ([]byte, error) {
 }
 
 func newTransport(
-	id sign.Identity, remote ed25519.PublicKey, aead *enigma.Enigma,
+	id sign.Identity,
+	remote ed25519.PublicKey,
+	aead *enigma.Enigma,
+	c net.Conn,
+	code string,
 ) *Transport {
 	return &Transport{
+		code:     code,
 		identity: id,
 		remote:   remote,
 		aead:     aead,
+		conn:     c,
 	}
 }

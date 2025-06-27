@@ -3,7 +3,10 @@ package identity
 import (
 	"crypto"
 	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"os"
 
 	"golang.org/x/crypto/ed25519"
 
@@ -67,28 +70,6 @@ func (e *Ed25519) Save(path string) error {
 	return nil
 }
 
-func (e *Ed25519) Load(path string) error {
-	data, err := readKeyData(path)
-	if err != nil {
-		return fmt.Errorf("loading private key: %w", err)
-	}
-	key, err := x509.ParsePKCS8PrivateKey(data)
-	if err != nil {
-		return fmt.Errorf("parsing private key: %w", err)
-	}
-	private, ok := key.(ed25519.PrivateKey)
-	if !ok {
-		return ErrInvalidKey
-	}
-	public, ok := private.Public().(ed25519.PublicKey)
-	if !ok {
-		panic("type assertion: public key is not of type ed25519.Key")
-	}
-	*e = Ed25519{privateKey: private, PublicKey: public}
-
-	return nil
-}
-
 func (e *Ed25519) Verifier() sign.Verifier {
 	return VerifyEd25519
 }
@@ -98,5 +79,33 @@ func NewEd25519() (*Ed25519, error) {
 	if err != nil {
 		return nil, err
 	}
+	return &Ed25519{privateKey: private, PublicKey: public}, nil
+}
+
+func LoadEd25519(path string) (sign.Identity, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, ErrMissingFile
+		}
+		return nil, fmt.Errorf("reading file: %w", err)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, ErrMissingPEM
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parsing key: %w", err)
+	}
+	private, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, ErrInvalidKey
+	}
+	public, ok := private.Public().(ed25519.PublicKey)
+	if !ok {
+		panic("type assertion: public key is not of type ed25519.Key")
+	}
+
 	return &Ed25519{privateKey: private, PublicKey: public}, nil
 }

@@ -11,21 +11,10 @@ const privateKeyType = "PRIVATE KEY"
 
 var (
 	ErrMissingPEM       = errors.New("no PEM data found")
+	ErrMissingFile      = errors.New("file not found")
 	ErrInvalidKey       = errors.New("invalid key type")
 	ErrInvalidSignature = errors.New("invalid signature")
 )
-
-func readKeyData(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading file: %w", err)
-	}
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, ErrMissingPEM
-	}
-	return block.Bytes, nil
-}
 
 func saveKey(key []byte, kType, path string) error {
 	file, err := os.Create(path)

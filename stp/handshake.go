@@ -13,24 +13,36 @@ import (
 )
 
 type Handshake struct {
-	Identity  []byte `json:"id"`
-	PublicKey []byte `json:"key"`
-	Salt      []byte `json:"salt,omitempty"`
+	Key       []byte `json:"key"`
+	TimeStamp Time   `json:"time"`
 }
 
-func RequestHandshake(id sign.Identity, c net.Conn) (*Transport, error) {
+func RequestHandshake(id sign.Identity, conn net.Conn) (*Transport, error) {
 	ml, err := exchange.NewMLKEM()
 	if err != nil {
-		return nil, fmt.Errorf("creating MLKEM: %v", err)
+		return nil, fmt.Errorf("creating MLKEM: %w", err)
 	}
-	if _, err := c.Write(ml.MarshalPublicKey()); err != nil {
+	h := Handshake{Key: ml.MarshalPublicKey(), TimeStamp: Now()}
+	handshakeReq, err := json.Marshal(h)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling handshake request: %w", err)
+	}
+	if _, err := conn.Write(handshakeReq); err != nil {
 		return nil, fmt.Errorf("write public key: %w", err)
 	}
 
-	ct, err := read(c)
+	response, err := read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("read ct: %w", err)
 	}
+	var handshakeResp Handshake
+	if err := json.Unmarshal(response, &handshakeResp); err != nil {
+		return nil, fmt.Errorf("unmarshaling handshake response: %w", err)
+	}
+	if !handshakeResp.TimeStamp.IsInPlusMinusSeconds(clockSkewSeconds) {
+		return nil, fmt.Errorf("handshake response: %w", ErrInvalidTimestamp)
+	}
+	ct := handshakeResp.Key
 	secret, err := ml.Decapsulate(ct)
 	if err != nil {
 		return nil, fmt.Errorf("decapsulate: %w", err)
@@ -40,24 +52,32 @@ func RequestHandshake(id sign.Identity, c net.Conn) (*Transport, error) {
 		return nil, fmt.Errorf("new aead: %w", err)
 	}
 
-	if err := encryptAndSendMyID(id, c, aead); err != nil {
+	if err := encryptAndSendMyID(id, conn, aead); err != nil {
 		return nil, fmt.Errorf("encrypt and send myID: %w", err)
 	}
 
-	remote, err := readAndVerifyTheirID(id, c, aead)
+	remote, err := readAndVerifyTheirID(id, conn, aead)
 	if err != nil {
 		return nil, fmt.Errorf("read and verify theirID: %w", err)
 	}
+	code := fmt.Sprintf("%.32X", ct)
 
-	return newTransport(id, remote.(ed25519.PublicKey), aead), nil
+	return newTransport(id, remote.(ed25519.PublicKey), aead, conn, code), nil
 }
 
-func AcceptHandshake(id sign.Identity, c net.Conn) (*Transport, error) {
-	encKey, err := read(c)
+func AcceptHandshake(id sign.Identity, conn net.Conn) (*Transport, error) {
+	request, err := read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("read encKey: %w", err)
 	}
-	secret, ct, err := exchange.EncapsulateMLKEM(encKey)
+	var handshakeReq Handshake
+	if err := json.Unmarshal(request, &handshakeReq); err != nil {
+		return nil, fmt.Errorf("unmarshaling handshake request: %w", err)
+	}
+	if !handshakeReq.TimeStamp.IsInPlusMinusSeconds(clockSkewSeconds) {
+		return nil, fmt.Errorf("handshake request: %w", ErrInvalidTimestamp)
+	}
+	secret, ct, err := exchange.EncapsulateMLKEM(handshakeReq.Key)
 	if err != nil {
 		return nil, fmt.Errorf("encapsulateMLKEM: %w", err)
 	}
@@ -65,20 +85,26 @@ func AcceptHandshake(id sign.Identity, c net.Conn) (*Transport, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new aead: %w", err)
 	}
-	if _, err := c.Write(ct); err != nil {
+	h := Handshake{Key: ct, TimeStamp: Now()}
+	handshakeResp, err := json.Marshal(h)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling handshake response: %w", err)
+	}
+	if _, err := conn.Write(handshakeResp); err != nil {
 		return nil, fmt.Errorf("write ct: %w", err)
 	}
 
-	remote, err := readAndVerifyTheirID(id, c, aead)
+	remote, err := readAndVerifyTheirID(id, conn, aead)
 	if err != nil {
 		return nil, fmt.Errorf("read and verify theirID: %w", err)
 	}
 
-	if err := encryptAndSendMyID(id, c, aead); err != nil {
+	if err := encryptAndSendMyID(id, conn, aead); err != nil {
 		return nil, fmt.Errorf("encrypt and send myID: %w", err)
 	}
+	code := fmt.Sprintf("%.32X", ct)
 
-	return newTransport(id, remote.(ed25519.PublicKey), aead), nil
+	return newTransport(id, remote.(ed25519.PublicKey), aead, conn, code), nil
 }
 
 func encryptAndSendMyID(
@@ -113,6 +139,9 @@ func readAndVerifyTheirID(
 	var st SignedTransport
 	if err := json.Unmarshal(decryptedTheirID, &st); err != nil {
 		return nil, fmt.Errorf("unmarshalling transport: %w", err)
+	}
+	if !st.Timestamp.IsInPlusMinusSeconds(clockSkewSeconds) {
+		return nil, ErrInvalidTimestamp
 	}
 	var theirPubKey []byte
 	if err := json.Unmarshal(st.Message, &theirPubKey); err != nil {
