@@ -1,4 +1,4 @@
-package identity_test
+package attest_test
 
 import (
 	"slices"
@@ -6,46 +6,43 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hossein1376/kamune/internal/identity"
-	"github.com/hossein1376/kamune/sign"
+	"github.com/hossein1376/kamune/internal/attest"
 )
-
-var _ sign.Identity = &identity.Ed25519{}
 
 func TestEd25519_SignVerify(t *testing.T) {
 	a := require.New(t)
 	msg := []byte("Make the world a better place")
 
-	e, err := identity.NewEd25519()
+	e, err := attest.New()
 	a.NoError(err)
 	a.NotNil(e)
-	pub := e.PublicKey
+	pub := e.PublicKey()
 	a.NotNil(pub)
 	sig, err := e.Sign(msg)
 	a.NoError(err)
 	a.NotNil(sig)
 
 	t.Run("valid signature", func(t *testing.T) {
-		_, err := identity.VerifyEd25519(pub, msg, sig)
-		a.NoError(err)
+		verified := attest.Verify(pub, msg, sig)
+		a.True(verified)
 	})
 	t.Run("invalid signature", func(t *testing.T) {
 		sig := slices.Clone(sig)
 		sig[0] ^= 0xFF
 
-		_, err := identity.VerifyEd25519(pub, msg, sig)
-		a.Error(err)
+		verified := attest.Verify(pub, msg, sig)
+		a.False(verified)
 	})
 	t.Run("invalid hash", func(t *testing.T) {
 		msg = append(msg, []byte("!")...)
 
-		_, err := identity.VerifyEd25519(pub, msg, sig)
-		a.Error(err)
+		verified := attest.Verify(pub, msg, sig)
+		a.False(verified)
 	})
 	t.Run("invalid public key", func(t *testing.T) {
-		another, err := identity.NewEd25519()
+		another, err := attest.New()
 		a.NoError(err)
-		_, err = identity.VerifyEd25519(another.PublicKey, msg, sig)
-		a.Error(err)
+		verified := attest.Verify(another.PublicKey(), msg, sig)
+		a.False(verified)
 	})
 }

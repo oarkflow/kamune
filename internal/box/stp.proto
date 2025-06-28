@@ -1,0 +1,35 @@
+syntax = "proto3";
+package box;
+option go_package = "./pb";
+
+import "google/protobuf/timestamp.proto";
+
+message SignedTransport {
+  bytes Data = 1;
+  bytes Signature = 2;
+  optional TransportContext Context = 3;
+}
+
+message TransportContext {}
+
+message Introduce {
+  bytes Public = 1;
+}
+
+message Handshake {
+  bytes Key = 1;
+  bytes Salt = 2;
+  bytes Nonce = 3;
+  optional HandshakeOptions Opts = 4;
+}
+
+message HandshakeOptions {}
+
+message Conversation {
+  bytes Message = 1;
+  Metadata Metadata = 2;
+}
+
+message Metadata {
+  google.protobuf.Timestamp Timestamp = 1;
+}

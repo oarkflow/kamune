@@ -2,9 +2,14 @@
 // passthrough; or (to anyone involved in internet censorship) suck this, punks.
 package stp
 
-type SignedTransport struct {
-	Audience  string `json:"aud,omitempty"`
-	Message   []byte `json:"msg"`
-	Signature []byte `json:"sig"`
-	Timestamp Time   `json:"ts"`
+import (
+	"google.golang.org/protobuf/proto"
+
+	"github.com/hossein1376/kamune/internal/box/pb"
+)
+
+type SignedTransport = pb.SignedTransport
+
+type Transferable interface {
+	proto.Message
 }

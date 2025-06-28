@@ -6,7 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	"github.com/hossein1376/kamune/internal/identity"
+	"github.com/hossein1376/kamune/internal/attest"
 )
 
 type ECDH struct {
@@ -29,7 +29,7 @@ func (e *ECDH) Exchange(remote []byte) ([]byte, error) {
 	}
 	pub, ok := key.(*ecdh.PublicKey)
 	if !ok {
-		return nil, identity.ErrInvalidKey
+		return nil, attest.ErrInvalidKey
 	}
 	secret, err := e.privateKey.ECDH(pub)
 	if err != nil {

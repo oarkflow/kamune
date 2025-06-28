@@ -1,4 +1,4 @@
-package identity
+package attest
 
 import (
 	"encoding/pem"
@@ -7,13 +7,15 @@ import (
 	"os"
 )
 
-const privateKeyType = "PRIVATE KEY"
+const (
+	publicKeyType  = "PUBLIC KEY"
+	privateKeyType = "PRIVATE KEY"
+)
 
 var (
-	ErrMissingPEM       = errors.New("no PEM data found")
-	ErrMissingFile      = errors.New("file not found")
-	ErrInvalidKey       = errors.New("invalid key type")
-	ErrInvalidSignature = errors.New("invalid signature")
+	ErrMissingPEM  = errors.New("no PEM data found")
+	ErrMissingFile = errors.New("file not found")
+	ErrInvalidKey  = errors.New("invalid key type")
 )
 
 func saveKey(key []byte, kType, path string) error {

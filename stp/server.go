@@ -8,8 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hossein1376/kamune/internal/identity"
-	"github.com/hossein1376/kamune/sign"
+	"github.com/hossein1376/kamune/internal/attest"
 )
 
 var (
@@ -20,9 +19,10 @@ var (
 type HandlerFunc func(t *Transport) error
 
 type Server struct {
-	Addr        string
-	ID          sign.Identity
-	HandlerFunc HandlerFunc
+	Addr         string
+	HandlerFunc  HandlerFunc
+	IntroHandler IntroductionHandler
+	attest       *attest.Attest
 }
 
 func ListenAndServe(addr string, h HandlerFunc) error {
@@ -57,18 +57,35 @@ func (s *Server) Serve(l net.Listener) error {
 	}
 }
 
-func (s *Server) serve(conn net.Conn) error {
+func (s *Server) serve(c net.Conn) error {
+	conn := Conn{Conn: c}
 	defer func() {
 		if err := recover(); err != nil {
 			s.log(slog.LevelError, "serve panic", slog.Any("err", err))
 		}
-		conn.Close()
+		if !conn.isClosed {
+			if err := conn.Close(); err != nil {
+				s.log(slog.LevelError, "close conn", slog.Any("err", err))
+			}
+		}
 	}()
 
-	t, err := AcceptHandshake(s.ID, conn)
+	remote, err := receiveIntroduction(conn)
+	if err != nil {
+		return fmt.Errorf("receive introduction: %w", err)
+	}
+	if err := sendIntroduction(conn, s.attest); err != nil {
+		return fmt.Errorf("send introduction: %w", err)
+	}
+	if err := s.IntroHandler(remote); err != nil {
+		return fmt.Errorf("intro handler: %w", err)
+	}
+
+	encoder, decoder, err := AcceptHandshake(conn, s.attest, remote)
 	if err != nil {
 		return fmt.Errorf("accept handshake: %w", err)
 	}
+	t := newTransport(s.attest, remote, encoder, decoder, conn)
 	err = s.HandlerFunc(t)
 	if err != nil {
 		return fmt.Errorf("handler: %w", err)
@@ -82,37 +99,37 @@ func (s *Server) log(lvl slog.Level, msg string, args ...any) {
 }
 
 func NewServer(addr string, h HandlerFunc) (*Server, error) {
-	id, err := loadCert()
+	at, err := loadCert()
 	if err != nil {
 		return nil, err
 	}
-	return &Server{ID: id, Addr: addr, HandlerFunc: h}, nil
+	return &Server{attest: at, Addr: addr, HandlerFunc: h, IntroHandler: defaultIntroductionHandler}, nil
 }
 
-func loadCert() (sign.Identity, error) {
-	id, err := identity.LoadEd25519(defaultIdentityPath)
+func loadCert() (*attest.Attest, error) {
+	id, err := attest.LoadFromDisk(defaultIdentityPath)
 	if err != nil {
 		switch {
-		case errors.Is(err, identity.ErrMissingFile):
+		case errors.Is(err, attest.ErrMissingFile):
 			id, err = newCert()
 			if err != nil {
 				return nil, fmt.Errorf("newCert: %w", err)
 			}
 		default:
-			return nil, fmt.Errorf("loading ed25519 cert: %w", err)
+			return nil, fmt.Errorf("loading cert: %w", err)
 		}
 	}
 
 	return id, nil
 }
 
-func newCert() (sign.Identity, error) {
+func newCert() (*attest.Attest, error) {
 	if err := os.MkdirAll(defaultIdentityDir, 0760); err != nil {
 		return nil, fmt.Errorf("MkdirAll: %w", err)
 	}
-	id, err := identity.NewEd25519()
+	id, err := attest.New()
 	if err != nil {
-		return nil, fmt.Errorf("NewEd25519: %w", err)
+		return nil, fmt.Errorf("New: %w", err)
 	}
 	if err := id.Save(defaultIdentityPath); err != nil {
 		return nil, fmt.Errorf("saving cert: %w", err)

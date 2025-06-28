@@ -1,158 +1,116 @@
 package stp
 
 import (
-	"crypto"
-	"crypto/ed25519"
-	"encoding/json"
+	"crypto/rand"
 	"fmt"
-	"net"
 
 	"github.com/hossein1376/kamune/enigma"
+	"github.com/hossein1376/kamune/internal/attest"
+	"github.com/hossein1376/kamune/internal/box/pb"
 	"github.com/hossein1376/kamune/internal/exchange"
-	"github.com/hossein1376/kamune/sign"
 )
 
-type Handshake struct {
-	Key       []byte `json:"key"`
-	TimeStamp Time   `json:"time"`
-}
-
-func RequestHandshake(id sign.Identity, conn net.Conn) (*Transport, error) {
+func RequestHandshake(
+	conn Conn, at *attest.Attest, remote *attest.PublicKey,
+) (encoder, decoder *enigma.Enigma, err error) {
 	ml, err := exchange.NewMLKEM()
 	if err != nil {
-		return nil, fmt.Errorf("creating MLKEM: %w", err)
+		err = fmt.Errorf("creating MLKEM: %w", err)
+		return
 	}
-	h := Handshake{Key: ml.MarshalPublicKey(), TimeStamp: Now()}
-	handshakeReq, err := json.Marshal(h)
+	salt := randomBytes(enigma.SaltSize)
+	nonce := randomBytes(enigma.BaseNonceSize)
+	req := &pb.Handshake{Key: ml.PublicKey.Bytes(), Salt: salt, Nonce: nonce}
+	reqBytes, err := serialize(req, at)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling handshake request: %w", err)
+		err = fmt.Errorf("serializing handshake req: %w", err)
+		return
 	}
-	if _, err := conn.Write(handshakeReq); err != nil {
-		return nil, fmt.Errorf("write public key: %w", err)
+	if _, err = conn.Write(reqBytes); err != nil {
+		err = fmt.Errorf("writing handshake req: %w", err)
+		return
 	}
 
-	response, err := read(conn)
+	respBytes, err := read(conn)
 	if err != nil {
-		return nil, fmt.Errorf("read ct: %w", err)
+		err = fmt.Errorf("reading handshake resp: %w", err)
+		return
 	}
-	var handshakeResp Handshake
-	if err := json.Unmarshal(response, &handshakeResp); err != nil {
-		return nil, fmt.Errorf("unmarshaling handshake response: %w", err)
+	var resp pb.Handshake
+	if err = deserialize(respBytes, &resp, remote); err != nil {
+		err = fmt.Errorf("deserializing handshake resp: %w", err)
+		return
 	}
-	if !handshakeResp.TimeStamp.IsInPlusMinusSeconds(clockSkewSeconds) {
-		return nil, fmt.Errorf("handshake response: %w", ErrInvalidTimestamp)
-	}
-	ct := handshakeResp.Key
-	secret, err := ml.Decapsulate(ct)
+	secret, err := ml.Decapsulate(resp.GetKey())
 	if err != nil {
-		return nil, fmt.Errorf("decapsulate: %w", err)
-	}
-	aead, err := enigma.NewEnigma(secret, ct)
-	if err != nil {
-		return nil, fmt.Errorf("new aead: %w", err)
+		err = fmt.Errorf("decapsulating secret: %w", err)
+		return
 	}
 
-	if err := encryptAndSendMyID(id, conn, aead); err != nil {
-		return nil, fmt.Errorf("encrypt and send myID: %w", err)
-	}
-
-	remote, err := readAndVerifyTheirID(id, conn, aead)
+	encoder, err = enigma.NewEnigma(secret, salt, nonce)
 	if err != nil {
-		return nil, fmt.Errorf("read and verify theirID: %w", err)
+		err = fmt.Errorf("creating encrypter: %w", err)
+		return
 	}
-	code := fmt.Sprintf("%.32X", ct)
+	decoder, err = enigma.NewEnigma(secret, resp.GetSalt(), resp.GetNonce())
+	if err != nil {
+		err = fmt.Errorf("creating decrypter: %w", err)
+		return
+	}
 
-	return newTransport(id, remote.(ed25519.PublicKey), aead, conn, code), nil
+	return encoder, decoder, nil
 }
 
-func AcceptHandshake(id sign.Identity, conn net.Conn) (*Transport, error) {
-	request, err := read(conn)
+func AcceptHandshake(
+	conn Conn, at *attest.Attest, remote *attest.PublicKey,
+) (encoder, decoder *enigma.Enigma, err error) {
+	reqBytes, err := read(conn)
 	if err != nil {
-		return nil, fmt.Errorf("read encKey: %w", err)
+		err = fmt.Errorf("reading handshake req: %w", err)
+		return
 	}
-	var handshakeReq Handshake
-	if err := json.Unmarshal(request, &handshakeReq); err != nil {
-		return nil, fmt.Errorf("unmarshaling handshake request: %w", err)
+	var req pb.Handshake
+	if err = deserialize(reqBytes, &req, remote); err != nil {
+		err = fmt.Errorf("deserializing handshake req: %w", err)
+		return
 	}
-	if !handshakeReq.TimeStamp.IsInPlusMinusSeconds(clockSkewSeconds) {
-		return nil, fmt.Errorf("handshake request: %w", ErrInvalidTimestamp)
-	}
-	secret, ct, err := exchange.EncapsulateMLKEM(handshakeReq.Key)
+	secret, ct, err := exchange.EncapsulateMLKEM(req.GetKey())
 	if err != nil {
-		return nil, fmt.Errorf("encapsulateMLKEM: %w", err)
-	}
-	aead, err := enigma.NewEnigma(secret, ct)
-	if err != nil {
-		return nil, fmt.Errorf("new aead: %w", err)
-	}
-	h := Handshake{Key: ct, TimeStamp: Now()}
-	handshakeResp, err := json.Marshal(h)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling handshake response: %w", err)
-	}
-	if _, err := conn.Write(handshakeResp); err != nil {
-		return nil, fmt.Errorf("write ct: %w", err)
+		err = fmt.Errorf("encapsulating: %w", err)
+		return
 	}
 
-	remote, err := readAndVerifyTheirID(id, conn, aead)
+	salt := randomBytes(enigma.SaltSize)
+	nonce := randomBytes(enigma.BaseNonceSize)
+	resp := &pb.Handshake{Key: ct, Salt: salt, Nonce: nonce}
+	respBytes, err := serialize(resp, at)
 	if err != nil {
-		return nil, fmt.Errorf("read and verify theirID: %w", err)
+		err = fmt.Errorf("serializing handshake resp: %w", err)
+		return
+	}
+	if _, err = conn.Write(respBytes); err != nil {
+		err = fmt.Errorf("writing handshake resp: %w", err)
+		return
 	}
 
-	if err := encryptAndSendMyID(id, conn, aead); err != nil {
-		return nil, fmt.Errorf("encrypt and send myID: %w", err)
+	encoder, err = enigma.NewEnigma(secret, salt, nonce)
+	if err != nil {
+		err = fmt.Errorf("creating encrypter: %w", err)
+		return
 	}
-	code := fmt.Sprintf("%.32X", ct)
+	decoder, err = enigma.NewEnigma(secret, req.GetSalt(), req.GetNonce())
+	if err != nil {
+		err = fmt.Errorf("creating decrypter: %w", err)
+		return
+	}
 
-	return newTransport(id, remote.(ed25519.PublicKey), aead, conn, code), nil
+	return
 }
 
-func encryptAndSendMyID(
-	id sign.Identity, c net.Conn, aead *enigma.Enigma,
-) error {
-	myID, err := seal(id, id.MarshalPublicKey())
-	if err != nil {
-		return fmt.Errorf("seal myID: %w", err)
+func randomBytes(l int) []byte {
+	rnd := make([]byte, l)
+	if _, err := rand.Read(rnd); err != nil {
+		panic(fmt.Errorf("generating random bytes: %w", err))
 	}
-	encryptedMyID, err := aead.Encrypt(myID)
-	if err != nil {
-		return fmt.Errorf("encrypt myID: %w", err)
-	}
-	if _, err := c.Write(encryptedMyID); err != nil {
-		return fmt.Errorf("write myID: %w", err)
-	}
-
-	return nil
-}
-
-func readAndVerifyTheirID(
-	id sign.Identity, c net.Conn, aead *enigma.Enigma,
-) (crypto.PublicKey, error) {
-	payload, err := read(c)
-	if err != nil {
-		return nil, fmt.Errorf("read theirID payload: %w", err)
-	}
-	decryptedTheirID, err := aead.Decrypt(payload)
-	if err != nil {
-		return nil, fmt.Errorf("decrypt theirID: %w", err)
-	}
-	var st SignedTransport
-	if err := json.Unmarshal(decryptedTheirID, &st); err != nil {
-		return nil, fmt.Errorf("unmarshalling transport: %w", err)
-	}
-	if !st.Timestamp.IsInPlusMinusSeconds(clockSkewSeconds) {
-		return nil, ErrInvalidTimestamp
-	}
-	var theirPubKey []byte
-	if err := json.Unmarshal(st.Message, &theirPubKey); err != nil {
-		return nil, fmt.Errorf("unmarshal their public key: %w", err)
-	}
-	remote, err := id.Verifier()(
-		theirPubKey, st.Message, st.Signature,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("verify theirID: %w", err)
-	}
-
-	return remote, nil
+	return rnd
 }

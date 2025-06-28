@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/hossein1376/kamune/internal/box/pb"
 	"github.com/hossein1376/kamune/stp"
 )
 
@@ -35,7 +36,8 @@ func (s *Session) talk(r io.Reader, w io.Writer) error {
 			return fmt.Errorf("reading input: %w", err)
 		}
 	}
-	err = s.transport.Send([]byte(input))
+	msg := &pb.Conversation{Message: []byte(input)}
+	err = s.transport.Send(msg)
 	if err != nil {
 		return fmt.Errorf("sending input: %w", err)
 	}
@@ -44,8 +46,8 @@ func (s *Session) talk(r io.Reader, w io.Writer) error {
 }
 
 func (s *Session) hear(w io.Writer) error {
-	var output []byte
-	if err := s.transport.Receive(&output); err != nil {
+	var resp pb.Conversation
+	if err := s.transport.Receive(&resp); err != nil {
 		switch {
 		case errors.Is(err, io.EOF):
 			return nil
@@ -54,7 +56,7 @@ func (s *Session) hear(w io.Writer) error {
 		}
 	}
 	fmt.Fprint(w, "\033[2K\r")
-	fmt.Fprintf(w, "Peer: %s\n> ", output)
+	fmt.Fprintf(w, "Peer: %s\n> ", resp.Message)
 
 	return nil
 }
@@ -67,7 +69,7 @@ func (s *Session) Chat() {
 }
 
 func (s *Session) chat(src io.Reader, dst io.Writer) <-chan error {
-	fmt.Fprintf(dst, "Session ID is %s. Happy chatting!\n", s.transport.Code())
+	fmt.Fprintln(dst, "Happy chatting!")
 	errs := make(chan error)
 	go func() {
 		for {
