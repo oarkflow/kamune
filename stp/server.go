@@ -129,7 +129,7 @@ func newCert() (*attest.Attest, error) {
 	}
 	id, err := attest.New()
 	if err != nil {
-		return nil, fmt.Errorf("New: %w", err)
+		return nil, fmt.Errorf("new attest: %w", err)
 	}
 	if err := id.Save(defaultIdentityPath); err != nil {
 		return nil, fmt.Errorf("saving cert: %w", err)
