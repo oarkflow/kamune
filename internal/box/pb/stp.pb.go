@@ -9,6 +9,7 @@ package pb
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -266,28 +267,28 @@ func (*HandshakeOptions) Descriptor() ([]byte, []int) {
 	return file_stp_proto_rawDescGZIP(), []int{4}
 }
 
-type Conversation struct {
+type Box struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Message       []byte                 `protobuf:"bytes,1,opt,name=Message,proto3" json:"Message,omitempty"`
+	Message       *anypb.Any             `protobuf:"bytes,1,opt,name=Message,proto3" json:"Message,omitempty"`
 	Metadata      *Metadata              `protobuf:"bytes,2,opt,name=Metadata,proto3" json:"Metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Conversation) Reset() {
-	*x = Conversation{}
+func (x *Box) Reset() {
+	*x = Box{}
 	mi := &file_stp_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Conversation) String() string {
+func (x *Box) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Conversation) ProtoMessage() {}
+func (*Box) ProtoMessage() {}
 
-func (x *Conversation) ProtoReflect() protoreflect.Message {
+func (x *Box) ProtoReflect() protoreflect.Message {
 	mi := &file_stp_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -299,19 +300,19 @@ func (x *Conversation) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Conversation.ProtoReflect.Descriptor instead.
-func (*Conversation) Descriptor() ([]byte, []int) {
+// Deprecated: Use Box.ProtoReflect.Descriptor instead.
+func (*Box) Descriptor() ([]byte, []int) {
 	return file_stp_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *Conversation) GetMessage() []byte {
+func (x *Box) GetMessage() *anypb.Any {
 	if x != nil {
 		return x.Message
 	}
 	return nil
 }
 
-func (x *Conversation) GetMetadata() *Metadata {
+func (x *Box) GetMetadata() *Metadata {
 	if x != nil {
 		return x.Metadata
 	}
@@ -320,7 +321,8 @@ func (x *Conversation) GetMetadata() *Metadata {
 
 type Metadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,1,opt,name=Sequence,proto3" json:"Sequence,omitempty"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -355,6 +357,13 @@ func (*Metadata) Descriptor() ([]byte, []int) {
 	return file_stp_proto_rawDescGZIP(), []int{6}
 }
 
+func (x *Metadata) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
 func (x *Metadata) GetTimestamp() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Timestamp
@@ -366,7 +375,7 @@ var File_stp_proto protoreflect.FileDescriptor
 
 const file_stp_proto_rawDesc = "" +
 	"\n" +
-	"\tstp.proto\x12\x03box\x1a\x1fgoogle/protobuf/timestamp.proto\"\x85\x01\n" +
+	"\tstp.proto\x12\x03box\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19google/protobuf/any.proto\"\x85\x01\n" +
 	"\x0fSignedTransport\x12\x12\n" +
 	"\x04Data\x18\x01 \x01(\fR\x04Data\x12\x1c\n" +
 	"\tSignature\x18\x02 \x01(\fR\tSignature\x124\n" +
@@ -382,12 +391,13 @@ const file_stp_proto_rawDesc = "" +
 	"\x05Nonce\x18\x03 \x01(\fR\x05Nonce\x12.\n" +
 	"\x04Opts\x18\x04 \x01(\v2\x15.box.HandshakeOptionsH\x00R\x04Opts\x88\x01\x01B\a\n" +
 	"\x05_Opts\"\x12\n" +
-	"\x10HandshakeOptions\"S\n" +
-	"\fConversation\x12\x18\n" +
-	"\aMessage\x18\x01 \x01(\fR\aMessage\x12)\n" +
-	"\bMetadata\x18\x02 \x01(\v2\r.box.MetadataR\bMetadata\"D\n" +
-	"\bMetadata\x128\n" +
-	"\tTimestamp\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tTimestampB\x06Z\x04./pbb\x06proto3"
+	"\x10HandshakeOptions\"`\n" +
+	"\x03Box\x12.\n" +
+	"\aMessage\x18\x01 \x01(\v2\x14.google.protobuf.AnyR\aMessage\x12)\n" +
+	"\bMetadata\x18\x02 \x01(\v2\r.box.MetadataR\bMetadata\"`\n" +
+	"\bMetadata\x12\x1a\n" +
+	"\bSequence\x18\x01 \x01(\x04R\bSequence\x128\n" +
+	"\tTimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tTimestampB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_stp_proto_rawDescOnce sync.Once
@@ -408,20 +418,22 @@ var file_stp_proto_goTypes = []any{
 	(*Introduce)(nil),             // 2: box.Introduce
 	(*Handshake)(nil),             // 3: box.Handshake
 	(*HandshakeOptions)(nil),      // 4: box.HandshakeOptions
-	(*Conversation)(nil),          // 5: box.Conversation
+	(*Box)(nil),                   // 5: box.Box
 	(*Metadata)(nil),              // 6: box.Metadata
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*anypb.Any)(nil),             // 7: google.protobuf.Any
+	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
 }
 var file_stp_proto_depIdxs = []int32{
 	1, // 0: box.SignedTransport.Context:type_name -> box.TransportContext
 	4, // 1: box.Handshake.Opts:type_name -> box.HandshakeOptions
-	6, // 2: box.Conversation.Metadata:type_name -> box.Metadata
-	7, // 3: box.Metadata.Timestamp:type_name -> google.protobuf.Timestamp
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	7, // 2: box.Box.Message:type_name -> google.protobuf.Any
+	6, // 3: box.Box.Metadata:type_name -> box.Metadata
+	8, // 4: box.Metadata.Timestamp:type_name -> google.protobuf.Timestamp
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_stp_proto_init() }

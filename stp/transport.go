@@ -6,7 +6,10 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/hossein1376/kamune"
 	"github.com/hossein1376/kamune/enigma"
 	"github.com/hossein1376/kamune/internal/attest"
 	"github.com/hossein1376/kamune/internal/box/pb"
@@ -14,6 +17,11 @@ import (
 
 const (
 	maxTransportSize = 10 * 1024
+)
+
+type (
+	box      = pb.Box
+	metadata = pb.Metadata
 )
 
 type Transport struct {
@@ -30,21 +38,37 @@ var (
 	ErrInvalidSignature = errors.New("invalid signature")
 )
 
-func (t *Transport) Receive(dst Transferable) error {
+func (t *Transport) Receive(dst kamune.Transferable) error {
+	seq := t.received.Add(1)
 	payload, err := read(t.conn)
 	if err != nil {
-		return fmt.Errorf("read payload: %w", err)
+		return fmt.Errorf("reading payload: %w", err)
 	}
-	decrypted, err := t.decoder.Decrypt(payload, t.received.Add(1))
+	decrypted, err := t.decoder.Decrypt(payload, seq)
 	if err != nil {
 		return fmt.Errorf("decrypting: %w", err)
 	}
+	var bx box
+	if err = deserialize(decrypted, &bx, t.remote); err != nil {
+		return fmt.Errorf("deserializing: %w", err)
+	}
+	if err := bx.GetMessage().UnmarshalTo(dst); err != nil {
+		return fmt.Errorf("unmarshaling: %w", err)
+	}
 
-	return deserialize(decrypted, dst, t.remote)
+	return nil
 }
 
-func (t *Transport) Send(message Transferable) error {
-	payload, err := serialize(message, t.attest)
+func (t *Transport) Send(message kamune.Transferable) error {
+	msg, err := anypb.New(message)
+	if err != nil {
+		return fmt.Errorf("constructing anypb: %w", err)
+	}
+	bx := &box{
+		Message:  msg,
+		Metadata: &metadata{Sequence: t.sent.Load(), Timestamp: timestamppb.Now()},
+	}
+	payload, err := serialize(bx, t.attest)
 	if err != nil {
 		return err
 	}
@@ -61,7 +85,7 @@ func (t *Transport) Close() error {
 }
 
 func serialize(
-	message Transferable, at *attest.Attest,
+	message kamune.Transferable, at *attest.Attest,
 ) ([]byte, error) {
 	msg, err := proto.Marshal(message)
 	if err != nil {
@@ -81,7 +105,7 @@ func serialize(
 }
 
 func deserialize(
-	payload []byte, dst Transferable, remote *attest.PublicKey,
+	payload []byte, dst kamune.Transferable, remote *attest.PublicKey,
 ) error {
 	var st pb.SignedTransport
 	if err := proto.Unmarshal(payload, &st); err != nil {

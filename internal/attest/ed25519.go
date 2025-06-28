@@ -28,7 +28,7 @@ func (e *Attest) PublicKey() *PublicKey {
 }
 
 func (e *Attest) MarshalPublicKey() []byte {
-	b, err := x509.MarshalPKIXPublicKey(e.PublicKey)
+	b, err := x509.MarshalPKIXPublicKey(e.publicKey)
 	if err != nil {
 		panic(fmt.Errorf("marshalling public key: %w", err))
 	}

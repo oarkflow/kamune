@@ -3,6 +3,7 @@ package box;
 option go_package = "./pb";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
 
 message SignedTransport {
   bytes Data = 1;
@@ -25,11 +26,12 @@ message Handshake {
 
 message HandshakeOptions {}
 
-message Conversation {
-  bytes Message = 1;
+message Box {
+  google.protobuf.Any Message = 1;
   Metadata Metadata = 2;
 }
 
 message Metadata {
-  google.protobuf.Timestamp Timestamp = 1;
+  uint64 Sequence = 1;
+  google.protobuf.Timestamp Timestamp = 2;
 }
