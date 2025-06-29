@@ -14,8 +14,14 @@ type RemoteVerifier func(key *attest.PublicKey) (err error)
 
 func defaultRemoteVerifier(remote *attest.PublicKey) error {
 	key := base64.StdEncoding.EncodeToString(remote.Marshal())
-	fmt.Printf("Make sure to verify peer's public key: %s\n", key)
-	return nil
+	fmt.Printf("Peer's public key: %s\n", key)
+	fmt.Printf("Do you verify it (y/N)? ")
+	var answer string
+	fmt.Scanln(&answer)
+	if answer == "y" || answer == "yes" {
+		return nil
+	}
+	return ErrVerificationFailed
 }
 
 func sendIntroduction(conn Conn, at *attest.Attest) error {

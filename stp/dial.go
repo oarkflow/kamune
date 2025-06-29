@@ -20,8 +20,9 @@ func Dial(addr string) (*Transport, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial: %w", err)
 	}
+	d := newDialer(conn, defaultRemoteVerifier)
 
-	return newDialer(conn, defaultRemoteVerifier).dial()
+	return d.dial()
 }
 
 func (d *dialer) dial() (*Transport, error) {

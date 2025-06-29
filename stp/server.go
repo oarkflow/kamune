@@ -74,11 +74,11 @@ func (s *Server) serve(c net.Conn) error {
 	if err != nil {
 		return fmt.Errorf("receive introduction: %w", err)
 	}
-	if err := sendIntroduction(conn, s.attest); err != nil {
-		return fmt.Errorf("send introduction: %w", err)
-	}
 	if err := s.RemoteVerifier(remote); err != nil {
 		return fmt.Errorf("verify remote: %w", err)
+	}
+	if err := sendIntroduction(conn, s.attest); err != nil {
+		return fmt.Errorf("send introduction: %w", err)
 	}
 
 	pt := &plainTransport{conn: conn, remote: remote, attest: s.attest}
