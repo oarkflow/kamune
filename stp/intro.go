@@ -25,7 +25,7 @@ func defaultRemoteVerifier(remote *attest.PublicKey) error {
 }
 
 func sendIntroduction(conn Conn, at *attest.Attest) error {
-	intro := &pb.Introduce{Public: at.MarshalPublicKey()}
+	intro := &pb.Introduce{Public: at.MarshalPublicKey(), Padding: padding()}
 	introBytes, err := proto.Marshal(intro)
 	if err != nil {
 		return fmt.Errorf("marshal host intoduce message: %w", err)

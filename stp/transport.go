@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/hossein1376/kamune/enigma"
@@ -16,6 +15,7 @@ import (
 
 const (
 	maxTransportSize = 10 * 1024
+	maxPaddingSize   = 64
 )
 
 var (
@@ -97,16 +97,21 @@ type plainTransport struct {
 func (pt *plainTransport) serialize(
 	msg Transferable, seq uint64,
 ) ([]byte, *Metadata, error) {
-	message, err := anypb.New(msg)
+	message, err := proto.Marshal(msg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("marshalling message: %w", err)
 	}
-	sig, err := pt.attest.Sign(message.Value)
+	sig, err := pt.attest.Sign(message)
 	if err != nil {
 		return nil, nil, fmt.Errorf("signing: %w", err)
 	}
 	md := &pb.Metadata{Sequence: seq, Timestamp: timestamppb.Now()}
-	st := &pb.SignedTransport{Data: message, Signature: sig, Metadata: md}
+	st := &pb.SignedTransport{
+		Data:      message,
+		Signature: sig,
+		Metadata:  md,
+		Padding:   padding(),
+	}
 	payload, err := proto.Marshal(st)
 	if err != nil {
 		return nil, nil, fmt.Errorf("marshalling transport: %w", err)
@@ -126,10 +131,10 @@ func (pt *plainTransport) deserialize(
 		return nil, ErrInvalidSeqNumber
 	}
 	msg := st.GetData()
-	if !attest.Verify(pt.remote, msg.Value, st.Signature) {
+	if !attest.Verify(pt.remote, msg, st.Signature) {
 		return nil, ErrInvalidSignature
 	}
-	if err := msg.UnmarshalTo(dst); err != nil {
+	if err := proto.Unmarshal(msg, dst); err != nil {
 		return nil, fmt.Errorf("unmarshal transport: %w", err)
 	}
 

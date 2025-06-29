@@ -3,16 +3,17 @@ package box;
 option go_package = "./pb";
 
 import "google/protobuf/timestamp.proto";
-import "google/protobuf/any.proto";
 
 message Introduce {
-  bytes Public = 1;
+  bytes padding = 1;
+  bytes Public = 2;
 }
 
 message SignedTransport {
-  google.protobuf.Any Data = 1;
+  bytes Data = 1;
   bytes Signature = 2;
   Metadata Metadata = 3;
+  bytes padding = 4;
 }
 
 message Metadata {
@@ -21,11 +22,8 @@ message Metadata {
 }
 
 message Handshake {
-  bytes Key = 1;
-  bytes Nonce = 2;
-  optional string SessionID = 3;
-}
-
-message Box {
-  bytes Message = 1;
+  bytes padding = 1;
+  bytes Key = 2;
+  bytes Nonce = 3;
+  optional string SessionID = 4;
 }

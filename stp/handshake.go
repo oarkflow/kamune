@@ -24,7 +24,11 @@ func requestHandshake(pt *plainTransport) (*Transport, error) {
 		return nil, fmt.Errorf("creating MLKEM: %w", err)
 	}
 	nonce := randomBytes(enigma.BaseNonceSize)
-	req := &pb.Handshake{Key: ml.PublicKey.Bytes(), Nonce: nonce}
+	req := &pb.Handshake{
+		Key:     ml.PublicKey.Bytes(),
+		Nonce:   nonce,
+		Padding: padding(),
+	}
 	reqBytes, _, err := pt.serialize(req, pt.sent.Load())
 	if err != nil {
 		return nil, fmt.Errorf("serializing handshake req: %w", err)
@@ -86,7 +90,12 @@ func acceptHandshake(pt *plainTransport) (*Transport, error) {
 
 	sessionID := rand.Text()
 	nonce := randomBytes(enigma.BaseNonceSize)
-	resp := &pb.Handshake{Key: ct, Nonce: nonce, SessionID: &sessionID}
+	resp := &pb.Handshake{
+		Key:       ct,
+		Nonce:     nonce,
+		SessionID: &sessionID,
+		Padding:   padding(),
+	}
 	respBytes, _, err := pt.serialize(resp, pt.sent.Load())
 	if err != nil {
 		return nil, fmt.Errorf("serializing handshake resp: %w", err)
@@ -118,14 +127,14 @@ func acceptHandshake(pt *plainTransport) (*Transport, error) {
 
 func sendVerification(t *Transport) error {
 	m := motto[mathrand.IntN(len(motto))]
-	if _, err := t.Send(&pb.Box{Message: m}); err != nil {
+	if _, err := t.Send(Bytes(m)); err != nil {
 		return fmt.Errorf("sending: %w", err)
 	}
-	var b pb.Box
-	if _, err := t.Receive(&b); err != nil {
+	r := Bytes(nil)
+	if _, err := t.Receive(r); err != nil {
 		return fmt.Errorf("receiving: %w", err)
 	}
-	if !bytes.Equal(b.GetMessage(), m) {
+	if !bytes.Equal(r.Value, m) {
 		return ErrVerificationFailed
 	}
 
@@ -133,11 +142,11 @@ func sendVerification(t *Transport) error {
 }
 
 func receiveVerification(t *Transport) error {
-	var b pb.Box
-	if _, err := t.Receive(&b); err != nil {
+	r := Bytes(nil)
+	if _, err := t.Receive(r); err != nil {
 		return fmt.Errorf("receiving: %w", err)
 	}
-	if _, err := t.Send(&pb.Box{Message: b.GetMessage()}); err != nil {
+	if _, err := t.Send(Bytes(r.Value)); err != nil {
 		return fmt.Errorf("sending: %w", err)
 	}
 
@@ -150,4 +159,10 @@ func randomBytes(l int) []byte {
 		panic(fmt.Errorf("generating random bytes: %w", err))
 	}
 	return rnd
+}
+
+func padding() []byte {
+	r := mathrand.IntN(maxPaddingSize)
+	fmt.Println(r)
+	return randomBytes(r)
 }
