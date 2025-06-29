@@ -8,11 +8,11 @@ import (
 
 type dialer struct {
 	conn         Conn
-	introHandler IntroductionHandler
+	verifyRemote RemoteVerifier
 }
 
-func newDialer(conn net.Conn, intro IntroductionHandler) *dialer {
-	return &dialer{conn: Conn{Conn: conn}, introHandler: intro}
+func newDialer(conn net.Conn, intro RemoteVerifier) *dialer {
+	return &dialer{conn: Conn{Conn: conn}, verifyRemote: intro}
 }
 
 func Dial(addr string) (*Transport, error) {
@@ -21,10 +21,10 @@ func Dial(addr string) (*Transport, error) {
 		return nil, fmt.Errorf("dial: %w", err)
 	}
 
-	return newDialer(conn, defaultIntroductionHandler).dial()
+	return newDialer(conn, defaultRemoteVerifier).dial()
 }
 
-func (d *dialer) dial() (_ *Transport, err error) {
+func (d *dialer) dial() (*Transport, error) {
 	defer func() {
 		if err := recover(); err != nil {
 			d.log(slog.LevelError, "dial panic", slog.Any("err", err))
@@ -32,29 +32,25 @@ func (d *dialer) dial() (_ *Transport, err error) {
 	}()
 	at, err := loadCert()
 	if err != nil {
-		err = fmt.Errorf("loading certificate: %w", err)
-		return
+		return nil, fmt.Errorf("loading certificate: %w", err)
 	}
 
 	if err = sendIntroduction(d.conn, at); err != nil {
-		err = fmt.Errorf("send introduction: %w", err)
-		return
+		return nil, fmt.Errorf("send introduction: %w", err)
 	}
 	remote, err := receiveIntroduction(d.conn)
 	if err != nil {
-		err = fmt.Errorf("receive introduction: %w", err)
-		return
+		return nil, fmt.Errorf("receive introduction: %w", err)
 	}
-	if err = d.introHandler(remote); err != nil {
-		err = fmt.Errorf("intro handler: %w", err)
-		return
+	if err = d.verifyRemote(remote); err != nil {
+		return nil, fmt.Errorf("verify remote: %w", err)
 	}
-	encoder, decoder, err := RequestHandshake(d.conn, at, remote)
+
+	pt := &plainTransport{conn: d.conn, attest: at, remote: remote}
+	t, err := requestHandshake(pt)
 	if err != nil {
-		err = fmt.Errorf("request handshake: %w", err)
-		return
+		return nil, fmt.Errorf("request handshake: %w", err)
 	}
-	t := newTransport(at, remote, encoder, decoder, d.conn)
 
 	return t, nil
 }

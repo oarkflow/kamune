@@ -11,11 +11,10 @@ func TestChaCha20Poly1305(t *testing.T) {
 	a := require.New(t)
 	msg := []byte("May tomorrow be a better day")
 	secret := []byte("let this be our secret")
-	salt := []byte("super salty")
 	baseNonce := make([]byte, BaseNonceSize)
 	rand.Read(baseNonce)
 
-	eng, err := NewEnigma(secret, salt, baseNonce)
+	eng, err := NewEnigma(secret, baseNonce, C2S)
 	a.NoError(err)
 	a.NotNil(eng)
 

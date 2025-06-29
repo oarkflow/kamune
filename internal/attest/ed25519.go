@@ -1,6 +1,7 @@
 package attest
 
 import (
+	"crypto"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -64,12 +65,20 @@ type PublicKey struct {
 	key ed25519.PublicKey
 }
 
-func (p PublicKey) Marshal() []byte {
+func (p *PublicKey) Marshal() []byte {
 	b, err := x509.MarshalPKIXPublicKey(p.key)
 	if err != nil {
 		panic(fmt.Errorf("marshalling public key: %w", err))
 	}
 	return b
+}
+
+func (p *PublicKey) Equal(x crypto.PublicKey) bool {
+	pk, ok := x.(*PublicKey)
+	if !ok {
+		p.key.Equal(x)
+	}
+	return p.key.Equal(pk.key)
 }
 
 func ParsePublicKey(remote []byte) (*PublicKey, error) {
@@ -107,7 +116,7 @@ func LoadFromDisk(path string) (*Attest, error) {
 	}
 	public, ok := private.Public().(ed25519.PublicKey)
 	if !ok {
-		panic("type assertion: public key is not of type ed25519.Key")
+		panic("type assertion: public key is not of type ed25519")
 	}
 
 	return &Attest{privateKey: private, publicKey: public}, nil

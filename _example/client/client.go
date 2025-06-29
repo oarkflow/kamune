@@ -23,7 +23,7 @@ func main() {
 
 	c, stop := chat.NewSession(t)
 	defer stop()
-	c.Chat()
+	c.Start()
 
 	return
 }

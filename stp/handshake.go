@@ -1,110 +1,147 @@
 package stp
 
 import (
+	"bytes"
 	"crypto/rand"
 	"fmt"
+	mathrand "math/rand/v2"
 
 	"github.com/hossein1376/kamune/enigma"
-	"github.com/hossein1376/kamune/internal/attest"
 	"github.com/hossein1376/kamune/internal/box/pb"
 	"github.com/hossein1376/kamune/internal/exchange"
 )
 
-func RequestHandshake(
-	conn Conn, at *attest.Attest, remote *attest.PublicKey,
-) (encoder, decoder *enigma.Enigma, err error) {
-	ml, err := exchange.NewMLKEM()
-	if err != nil {
-		err = fmt.Errorf("creating MLKEM: %w", err)
-		return
-	}
-	salt := randomBytes(enigma.SaltSize)
-	nonce := randomBytes(enigma.BaseNonceSize)
-	req := &pb.Handshake{Key: ml.PublicKey.Bytes(), Salt: salt, Nonce: nonce}
-	reqBytes, err := serialize(req, at)
-	if err != nil {
-		err = fmt.Errorf("serializing handshake req: %w", err)
-		return
-	}
-	if _, err = conn.Write(reqBytes); err != nil {
-		err = fmt.Errorf("writing handshake req: %w", err)
-		return
-	}
-
-	respBytes, err := read(conn)
-	if err != nil {
-		err = fmt.Errorf("reading handshake resp: %w", err)
-		return
-	}
-	var resp pb.Handshake
-	if err = deserialize(respBytes, &resp, remote); err != nil {
-		err = fmt.Errorf("deserializing handshake resp: %w", err)
-		return
-	}
-	secret, err := ml.Decapsulate(resp.GetKey())
-	if err != nil {
-		err = fmt.Errorf("decapsulating secret: %w", err)
-		return
-	}
-
-	encoder, err = enigma.NewEnigma(secret, salt, nonce)
-	if err != nil {
-		err = fmt.Errorf("creating encrypter: %w", err)
-		return
-	}
-	decoder, err = enigma.NewEnigma(secret, resp.GetSalt(), resp.GetNonce())
-	if err != nil {
-		err = fmt.Errorf("creating decrypter: %w", err)
-		return
-	}
-
-	return encoder, decoder, nil
+var motto = [][]byte{
+	[]byte("For those who kept on fighting, against all odds."),
+	[]byte("Nothing is really gone, just forgotten."),
+	[]byte("A beautiful illusion, or an ugly reality? Make your choice."),
+	[]byte("Will you still do it, even if it wouldn't matter in the end?"),
 }
 
-func AcceptHandshake(
-	conn Conn, at *attest.Attest, remote *attest.PublicKey,
-) (encoder, decoder *enigma.Enigma, err error) {
-	reqBytes, err := read(conn)
+func requestHandshake(pt *plainTransport) (*Transport, error) {
+	ml, err := exchange.NewMLKEM()
 	if err != nil {
-		err = fmt.Errorf("reading handshake req: %w", err)
-		return
+		return nil, fmt.Errorf("creating MLKEM: %w", err)
+	}
+	nonce := randomBytes(enigma.BaseNonceSize)
+	req := &pb.Handshake{Key: ml.PublicKey.Bytes(), Nonce: nonce}
+	reqBytes, _, err := pt.serialize(req, pt.sent.Load())
+	if err != nil {
+		return nil, fmt.Errorf("serializing handshake req: %w", err)
+	}
+	if _, err = pt.conn.Write(reqBytes); err != nil {
+		return nil, fmt.Errorf("writing handshake req: %w", err)
+	}
+	pt.sent.Add(1)
+
+	respBytes, err := read(pt.conn)
+	if err != nil {
+		return nil, fmt.Errorf("reading handshake resp: %w", err)
+	}
+	var resp pb.Handshake
+	if _, err = pt.deserialize(respBytes, &resp, pt.received.Load()); err != nil {
+		return nil, fmt.Errorf("deserializing handshake resp: %w", err)
+	}
+	pt.received.Add(1)
+	secret, err := ml.Decapsulate(resp.GetKey())
+	if err != nil {
+		return nil, fmt.Errorf("decapsulating secret: %w", err)
+	}
+
+	encoder, err := enigma.NewEnigma(secret, nonce, enigma.C2S)
+	if err != nil {
+		return nil, fmt.Errorf("creating encrypter: %w", err)
+	}
+	decoder, err := enigma.NewEnigma(secret, resp.GetNonce(), enigma.S2C)
+	if err != nil {
+		return nil, fmt.Errorf("creating decrypter: %w", err)
+	}
+
+	t := newTransport(pt, resp.GetSessionID(), encoder, decoder)
+	if err := sendVerification(t); err != nil {
+		return nil, fmt.Errorf("sending verification: %w", err)
+	}
+	if err := receiveVerification(t); err != nil {
+		return nil, fmt.Errorf("receiving verification: %w", err)
+	}
+
+	return t, nil
+}
+
+func acceptHandshake(pt *plainTransport) (*Transport, error) {
+	reqBytes, err := read(pt.conn)
+	if err != nil {
+		return nil, fmt.Errorf("reading handshake req: %w", err)
+
 	}
 	var req pb.Handshake
-	if err = deserialize(reqBytes, &req, remote); err != nil {
-		err = fmt.Errorf("deserializing handshake req: %w", err)
-		return
+	if _, err = pt.deserialize(reqBytes, &req, pt.received.Load()); err != nil {
+		return nil, fmt.Errorf("deserializing handshake req: %w", err)
 	}
+	pt.received.Add(1)
 	secret, ct, err := exchange.EncapsulateMLKEM(req.GetKey())
 	if err != nil {
-		err = fmt.Errorf("encapsulating: %w", err)
-		return
+		return nil, fmt.Errorf("encapsulating: %w", err)
 	}
 
-	salt := randomBytes(enigma.SaltSize)
+	sessionID := rand.Text()
 	nonce := randomBytes(enigma.BaseNonceSize)
-	resp := &pb.Handshake{Key: ct, Salt: salt, Nonce: nonce}
-	respBytes, err := serialize(resp, at)
+	resp := &pb.Handshake{Key: ct, Nonce: nonce, SessionID: &sessionID}
+	respBytes, _, err := pt.serialize(resp, pt.sent.Load())
 	if err != nil {
-		err = fmt.Errorf("serializing handshake resp: %w", err)
-		return
+		return nil, fmt.Errorf("serializing handshake resp: %w", err)
 	}
-	if _, err = conn.Write(respBytes); err != nil {
-		err = fmt.Errorf("writing handshake resp: %w", err)
-		return
+	if _, err = pt.conn.Write(respBytes); err != nil {
+		return nil, fmt.Errorf("writing handshake resp: %w", err)
+	}
+	pt.sent.Add(1)
+
+	encoder, err := enigma.NewEnigma(secret, nonce, enigma.S2C)
+	if err != nil {
+		return nil, fmt.Errorf("creating encrypter: %w", err)
+	}
+	decoder, err := enigma.NewEnigma(secret, req.GetNonce(), enigma.C2S)
+	if err != nil {
+		return nil, fmt.Errorf("creating decrypter: %w", err)
 	}
 
-	encoder, err = enigma.NewEnigma(secret, salt, nonce)
-	if err != nil {
-		err = fmt.Errorf("creating encrypter: %w", err)
-		return
+	t := newTransport(pt, sessionID, encoder, decoder)
+	if err := receiveVerification(t); err != nil {
+		return nil, fmt.Errorf("receiving verification: %w", err)
 	}
-	decoder, err = enigma.NewEnigma(secret, req.GetSalt(), req.GetNonce())
-	if err != nil {
-		err = fmt.Errorf("creating decrypter: %w", err)
-		return
+	if err := sendVerification(t); err != nil {
+		return nil, fmt.Errorf("sending verification: %w", err)
 	}
 
-	return
+	return t, nil
+}
+
+func sendVerification(t *Transport) error {
+	m := motto[mathrand.IntN(len(motto))]
+	if _, err := t.Send(&pb.Box{Message: m}); err != nil {
+		return fmt.Errorf("sending: %w", err)
+	}
+	var b pb.Box
+	if _, err := t.Receive(&b); err != nil {
+		return fmt.Errorf("receiving: %w", err)
+	}
+	if !bytes.Equal(b.GetMessage(), m) {
+		return ErrVerificationFailed
+	}
+
+	return nil
+}
+
+func receiveVerification(t *Transport) error {
+	var b pb.Box
+	if _, err := t.Receive(&b); err != nil {
+		return fmt.Errorf("receiving: %w", err)
+	}
+	if _, err := t.Send(&pb.Box{Message: b.GetMessage()}); err != nil {
+		return fmt.Errorf("sending: %w", err)
+	}
+
+	return nil
 }
 
 func randomBytes(l int) []byte {

@@ -26,7 +26,7 @@ func RunServer(addr string) error {
 func handler(t *stp.Transport) error {
 	c, stop := chat.NewSession(t)
 	defer stop()
-	c.Chat()
+	c.Start()
 
 	return nil
 }

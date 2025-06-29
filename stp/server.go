@@ -19,10 +19,10 @@ var (
 type HandlerFunc func(t *Transport) error
 
 type Server struct {
-	Addr         string
-	HandlerFunc  HandlerFunc
-	IntroHandler IntroductionHandler
-	attest       *attest.Attest
+	Addr           string
+	HandlerFunc    HandlerFunc
+	RemoteVerifier RemoteVerifier
+	attest         *attest.Attest
 }
 
 func ListenAndServe(addr string, h HandlerFunc) error {
@@ -77,15 +77,15 @@ func (s *Server) serve(c net.Conn) error {
 	if err := sendIntroduction(conn, s.attest); err != nil {
 		return fmt.Errorf("send introduction: %w", err)
 	}
-	if err := s.IntroHandler(remote); err != nil {
-		return fmt.Errorf("intro handler: %w", err)
+	if err := s.RemoteVerifier(remote); err != nil {
+		return fmt.Errorf("verify remote: %w", err)
 	}
 
-	encoder, decoder, err := AcceptHandshake(conn, s.attest, remote)
+	pt := &plainTransport{conn: conn, remote: remote, attest: s.attest}
+	t, err := acceptHandshake(pt)
 	if err != nil {
 		return fmt.Errorf("accept handshake: %w", err)
 	}
-	t := newTransport(s.attest, remote, encoder, decoder, conn)
 	err = s.HandlerFunc(t)
 	if err != nil {
 		return fmt.Errorf("handler: %w", err)
@@ -103,7 +103,12 @@ func NewServer(addr string, h HandlerFunc) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{attest: at, Addr: addr, HandlerFunc: h, IntroHandler: defaultIntroductionHandler}, nil
+	return &Server{
+		attest:         at,
+		Addr:           addr,
+		HandlerFunc:    h,
+		RemoteVerifier: defaultRemoteVerifier,
+	}, nil
 }
 
 func loadCert() (*attest.Attest, error) {

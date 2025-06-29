@@ -23,18 +23,62 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type Introduce struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Public        []byte                 `protobuf:"bytes,1,opt,name=Public,proto3" json:"Public,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Introduce) Reset() {
+	*x = Introduce{}
+	mi := &file_stp_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Introduce) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Introduce) ProtoMessage() {}
+
+func (x *Introduce) ProtoReflect() protoreflect.Message {
+	mi := &file_stp_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Introduce.ProtoReflect.Descriptor instead.
+func (*Introduce) Descriptor() ([]byte, []int) {
+	return file_stp_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Introduce) GetPublic() []byte {
+	if x != nil {
+		return x.Public
+	}
+	return nil
+}
+
 type SignedTransport struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=Data,proto3" json:"Data,omitempty"`
+	Data          *anypb.Any             `protobuf:"bytes,1,opt,name=Data,proto3" json:"Data,omitempty"`
 	Signature     []byte                 `protobuf:"bytes,2,opt,name=Signature,proto3" json:"Signature,omitempty"`
-	Context       *TransportContext      `protobuf:"bytes,3,opt,name=Context,proto3,oneof" json:"Context,omitempty"`
+	Metadata      *Metadata              `protobuf:"bytes,3,opt,name=Metadata,proto3" json:"Metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SignedTransport) Reset() {
 	*x = SignedTransport{}
-	mi := &file_stp_proto_msgTypes[0]
+	mi := &file_stp_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -46,7 +90,7 @@ func (x *SignedTransport) String() string {
 func (*SignedTransport) ProtoMessage() {}
 
 func (x *SignedTransport) ProtoReflect() protoreflect.Message {
-	mi := &file_stp_proto_msgTypes[0]
+	mi := &file_stp_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59,10 +103,10 @@ func (x *SignedTransport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SignedTransport.ProtoReflect.Descriptor instead.
 func (*SignedTransport) Descriptor() ([]byte, []int) {
-	return file_stp_proto_rawDescGZIP(), []int{0}
+	return file_stp_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *SignedTransport) GetData() []byte {
+func (x *SignedTransport) GetData() *anypb.Any {
 	if x != nil {
 		return x.Data
 	}
@@ -76,70 +120,35 @@ func (x *SignedTransport) GetSignature() []byte {
 	return nil
 }
 
-func (x *SignedTransport) GetContext() *TransportContext {
+func (x *SignedTransport) GetMetadata() *Metadata {
 	if x != nil {
-		return x.Context
+		return x.Metadata
 	}
 	return nil
 }
 
-type TransportContext struct {
+type Metadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sequence      uint64                 `protobuf:"varint,1,opt,name=Sequence,proto3" json:"Sequence,omitempty"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *TransportContext) Reset() {
-	*x = TransportContext{}
-	mi := &file_stp_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TransportContext) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TransportContext) ProtoMessage() {}
-
-func (x *TransportContext) ProtoReflect() protoreflect.Message {
-	mi := &file_stp_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TransportContext.ProtoReflect.Descriptor instead.
-func (*TransportContext) Descriptor() ([]byte, []int) {
-	return file_stp_proto_rawDescGZIP(), []int{1}
-}
-
-type Introduce struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Public        []byte                 `protobuf:"bytes,1,opt,name=Public,proto3" json:"Public,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Introduce) Reset() {
-	*x = Introduce{}
+func (x *Metadata) Reset() {
+	*x = Metadata{}
 	mi := &file_stp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Introduce) String() string {
+func (x *Metadata) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Introduce) ProtoMessage() {}
+func (*Metadata) ProtoMessage() {}
 
-func (x *Introduce) ProtoReflect() protoreflect.Message {
+func (x *Metadata) ProtoReflect() protoreflect.Message {
 	mi := &file_stp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -151,14 +160,21 @@ func (x *Introduce) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Introduce.ProtoReflect.Descriptor instead.
-func (*Introduce) Descriptor() ([]byte, []int) {
+// Deprecated: Use Metadata.ProtoReflect.Descriptor instead.
+func (*Metadata) Descriptor() ([]byte, []int) {
 	return file_stp_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Introduce) GetPublic() []byte {
+func (x *Metadata) GetSequence() uint64 {
 	if x != nil {
-		return x.Public
+		return x.Sequence
+	}
+	return 0
+}
+
+func (x *Metadata) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
 	}
 	return nil
 }
@@ -166,9 +182,8 @@ func (x *Introduce) GetPublic() []byte {
 type Handshake struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           []byte                 `protobuf:"bytes,1,opt,name=Key,proto3" json:"Key,omitempty"`
-	Salt          []byte                 `protobuf:"bytes,2,opt,name=Salt,proto3" json:"Salt,omitempty"`
-	Nonce         []byte                 `protobuf:"bytes,3,opt,name=Nonce,proto3" json:"Nonce,omitempty"`
-	Opts          *HandshakeOptions      `protobuf:"bytes,4,opt,name=Opts,proto3,oneof" json:"Opts,omitempty"`
+	Nonce         []byte                 `protobuf:"bytes,2,opt,name=Nonce,proto3" json:"Nonce,omitempty"`
+	SessionID     *string                `protobuf:"bytes,3,opt,name=SessionID,proto3,oneof" json:"SessionID,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -210,13 +225,6 @@ func (x *Handshake) GetKey() []byte {
 	return nil
 }
 
-func (x *Handshake) GetSalt() []byte {
-	if x != nil {
-		return x.Salt
-	}
-	return nil
-}
-
 func (x *Handshake) GetNonce() []byte {
 	if x != nil {
 		return x.Nonce
@@ -224,60 +232,23 @@ func (x *Handshake) GetNonce() []byte {
 	return nil
 }
 
-func (x *Handshake) GetOpts() *HandshakeOptions {
-	if x != nil {
-		return x.Opts
+func (x *Handshake) GetSessionID() string {
+	if x != nil && x.SessionID != nil {
+		return *x.SessionID
 	}
-	return nil
-}
-
-type HandshakeOptions struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HandshakeOptions) Reset() {
-	*x = HandshakeOptions{}
-	mi := &file_stp_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HandshakeOptions) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HandshakeOptions) ProtoMessage() {}
-
-func (x *HandshakeOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_stp_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HandshakeOptions.ProtoReflect.Descriptor instead.
-func (*HandshakeOptions) Descriptor() ([]byte, []int) {
-	return file_stp_proto_rawDescGZIP(), []int{4}
+	return ""
 }
 
 type Box struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Message       *anypb.Any             `protobuf:"bytes,1,opt,name=Message,proto3" json:"Message,omitempty"`
-	Metadata      *Metadata              `protobuf:"bytes,2,opt,name=Metadata,proto3" json:"Metadata,omitempty"`
+	Message       []byte                 `protobuf:"bytes,1,opt,name=Message,proto3" json:"Message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Box) Reset() {
 	*x = Box{}
-	mi := &file_stp_proto_msgTypes[5]
+	mi := &file_stp_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -289,7 +260,7 @@ func (x *Box) String() string {
 func (*Box) ProtoMessage() {}
 
 func (x *Box) ProtoReflect() protoreflect.Message {
-	mi := &file_stp_proto_msgTypes[5]
+	mi := &file_stp_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -302,71 +273,12 @@ func (x *Box) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Box.ProtoReflect.Descriptor instead.
 func (*Box) Descriptor() ([]byte, []int) {
-	return file_stp_proto_rawDescGZIP(), []int{5}
+	return file_stp_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *Box) GetMessage() *anypb.Any {
+func (x *Box) GetMessage() []byte {
 	if x != nil {
 		return x.Message
-	}
-	return nil
-}
-
-func (x *Box) GetMetadata() *Metadata {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
-type Metadata struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sequence      uint64                 `protobuf:"varint,1,opt,name=Sequence,proto3" json:"Sequence,omitempty"`
-	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Metadata) Reset() {
-	*x = Metadata{}
-	mi := &file_stp_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Metadata) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Metadata) ProtoMessage() {}
-
-func (x *Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_stp_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Metadata.ProtoReflect.Descriptor instead.
-func (*Metadata) Descriptor() ([]byte, []int) {
-	return file_stp_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *Metadata) GetSequence() uint64 {
-	if x != nil {
-		return x.Sequence
-	}
-	return 0
-}
-
-func (x *Metadata) GetTimestamp() *timestamppb.Timestamp {
-	if x != nil {
-		return x.Timestamp
 	}
 	return nil
 }
@@ -375,29 +287,24 @@ var File_stp_proto protoreflect.FileDescriptor
 
 const file_stp_proto_rawDesc = "" +
 	"\n" +
-	"\tstp.proto\x12\x03box\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19google/protobuf/any.proto\"\x85\x01\n" +
-	"\x0fSignedTransport\x12\x12\n" +
-	"\x04Data\x18\x01 \x01(\fR\x04Data\x12\x1c\n" +
-	"\tSignature\x18\x02 \x01(\fR\tSignature\x124\n" +
-	"\aContext\x18\x03 \x01(\v2\x15.box.TransportContextH\x00R\aContext\x88\x01\x01B\n" +
-	"\n" +
-	"\b_Context\"\x12\n" +
-	"\x10TransportContext\"#\n" +
+	"\tstp.proto\x12\x03box\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19google/protobuf/any.proto\"#\n" +
 	"\tIntroduce\x12\x16\n" +
-	"\x06Public\x18\x01 \x01(\fR\x06Public\"\x80\x01\n" +
-	"\tHandshake\x12\x10\n" +
-	"\x03Key\x18\x01 \x01(\fR\x03Key\x12\x12\n" +
-	"\x04Salt\x18\x02 \x01(\fR\x04Salt\x12\x14\n" +
-	"\x05Nonce\x18\x03 \x01(\fR\x05Nonce\x12.\n" +
-	"\x04Opts\x18\x04 \x01(\v2\x15.box.HandshakeOptionsH\x00R\x04Opts\x88\x01\x01B\a\n" +
-	"\x05_Opts\"\x12\n" +
-	"\x10HandshakeOptions\"`\n" +
-	"\x03Box\x12.\n" +
-	"\aMessage\x18\x01 \x01(\v2\x14.google.protobuf.AnyR\aMessage\x12)\n" +
-	"\bMetadata\x18\x02 \x01(\v2\r.box.MetadataR\bMetadata\"`\n" +
+	"\x06Public\x18\x01 \x01(\fR\x06Public\"\x84\x01\n" +
+	"\x0fSignedTransport\x12(\n" +
+	"\x04Data\x18\x01 \x01(\v2\x14.google.protobuf.AnyR\x04Data\x12\x1c\n" +
+	"\tSignature\x18\x02 \x01(\fR\tSignature\x12)\n" +
+	"\bMetadata\x18\x03 \x01(\v2\r.box.MetadataR\bMetadata\"`\n" +
 	"\bMetadata\x12\x1a\n" +
 	"\bSequence\x18\x01 \x01(\x04R\bSequence\x128\n" +
-	"\tTimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tTimestampB\x06Z\x04./pbb\x06proto3"
+	"\tTimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tTimestamp\"d\n" +
+	"\tHandshake\x12\x10\n" +
+	"\x03Key\x18\x01 \x01(\fR\x03Key\x12\x14\n" +
+	"\x05Nonce\x18\x02 \x01(\fR\x05Nonce\x12!\n" +
+	"\tSessionID\x18\x03 \x01(\tH\x00R\tSessionID\x88\x01\x01B\f\n" +
+	"\n" +
+	"_SessionID\"\x1f\n" +
+	"\x03Box\x12\x18\n" +
+	"\aMessage\x18\x01 \x01(\fR\aMessageB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_stp_proto_rawDescOnce sync.Once
@@ -411,29 +318,25 @@ func file_stp_proto_rawDescGZIP() []byte {
 	return file_stp_proto_rawDescData
 }
 
-var file_stp_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_stp_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_stp_proto_goTypes = []any{
-	(*SignedTransport)(nil),       // 0: box.SignedTransport
-	(*TransportContext)(nil),      // 1: box.TransportContext
-	(*Introduce)(nil),             // 2: box.Introduce
+	(*Introduce)(nil),             // 0: box.Introduce
+	(*SignedTransport)(nil),       // 1: box.SignedTransport
+	(*Metadata)(nil),              // 2: box.Metadata
 	(*Handshake)(nil),             // 3: box.Handshake
-	(*HandshakeOptions)(nil),      // 4: box.HandshakeOptions
-	(*Box)(nil),                   // 5: box.Box
-	(*Metadata)(nil),              // 6: box.Metadata
-	(*anypb.Any)(nil),             // 7: google.protobuf.Any
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*Box)(nil),                   // 4: box.Box
+	(*anypb.Any)(nil),             // 5: google.protobuf.Any
+	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
 }
 var file_stp_proto_depIdxs = []int32{
-	1, // 0: box.SignedTransport.Context:type_name -> box.TransportContext
-	4, // 1: box.Handshake.Opts:type_name -> box.HandshakeOptions
-	7, // 2: box.Box.Message:type_name -> google.protobuf.Any
-	6, // 3: box.Box.Metadata:type_name -> box.Metadata
-	8, // 4: box.Metadata.Timestamp:type_name -> google.protobuf.Timestamp
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	5, // 0: box.SignedTransport.Data:type_name -> google.protobuf.Any
+	2, // 1: box.SignedTransport.Metadata:type_name -> box.Metadata
+	6, // 2: box.Metadata.Timestamp:type_name -> google.protobuf.Timestamp
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_stp_proto_init() }
@@ -441,7 +344,6 @@ func file_stp_proto_init() {
 	if File_stp_proto != nil {
 		return
 	}
-	file_stp_proto_msgTypes[0].OneofWrappers = []any{}
 	file_stp_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -449,7 +351,7 @@ func file_stp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stp_proto_rawDesc), len(file_stp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

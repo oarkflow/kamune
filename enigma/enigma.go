@@ -14,15 +14,16 @@ import (
 )
 
 const (
-	nonceSize     = chacha20poly1305.NonceSizeX
+	nonceSize     = chacha20poly1305.NonceSize
 	uint64Size    = int(unsafe.Sizeof(uint64(0)))
 	BaseNonceSize = nonceSize - uint64Size
-	SaltSize      = 32
 )
 
 var (
 	ErrInvalidNonceLength = errors.New("bad nonce length")
 
+	C2S    = []byte("client-to-server-cipher")
+	S2C    = []byte("server-to-client-cipher")
 	hasher = sha512.New
 )
 
@@ -31,19 +32,18 @@ type Enigma struct {
 	baseNonce []byte
 }
 
-func NewEnigma(secret, salt, baseNonce []byte) (*Enigma, error) {
+func NewEnigma(secret, baseNonce, info []byte) (*Enigma, error) {
 	if len(baseNonce) != BaseNonceSize {
 		return nil, ErrInvalidNonceLength
 	}
-	salt = hasher().Sum(salt)
-	r := hkdf.New(hasher, secret, salt, nil)
-	key := make([]byte, 32)
+	r := hkdf.Expand(hasher, secret, info)
+	key := make([]byte, chacha20poly1305.KeySize)
 	if _, err := io.ReadFull(r, key); err != nil {
 		return nil, fmt.Errorf("read key: %w", err)
 	}
-	aead, err := chacha20poly1305.NewX(key)
+	aead, err := chacha20poly1305.New(key)
 	if err != nil {
-		return nil, fmt.Errorf("xchacha20poly1305: %w", err)
+		return nil, fmt.Errorf("chacha20poly1305: %w", err)
 	}
 
 	return &Enigma{aead: aead, baseNonce: baseNonce}, nil

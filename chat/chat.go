@@ -6,25 +6,25 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"time"
 
-	"github.com/hossein1376/kamune"
 	"github.com/hossein1376/kamune/stp"
 )
 
-type Session struct {
+type Chat struct {
 	transport *stp.Transport
 	stop      chan struct{}
 }
 
-func NewSession(t *stp.Transport) (*Session, func()) {
-	s := &Session{transport: t}
+func NewSession(t *stp.Transport) (*Chat, func()) {
+	s := &Chat{transport: t, stop: make(chan struct{}, 2)}
 	return s, func() {
 		s.stop <- struct{}{}
 		s.stop <- struct{}{}
 	}
 }
 
-func (s *Session) talk(r io.Reader, w io.Writer) error {
+func (s *Chat) talk(r io.Reader, w io.Writer) error {
 	fmt.Fprintf(w, "> ")
 	var input string
 	_, err := fmt.Fscanln(r, &input)
@@ -36,8 +36,7 @@ func (s *Session) talk(r io.Reader, w io.Writer) error {
 			return fmt.Errorf("reading input: %w", err)
 		}
 	}
-	b := kamune.NewBytes([]byte(input))
-	err = s.transport.Send(&b)
+	_, err = s.transport.Send(stp.Bytes([]byte(input)))
 	if err != nil {
 		return fmt.Errorf("sending input: %w", err)
 	}
@@ -45,9 +44,9 @@ func (s *Session) talk(r io.Reader, w io.Writer) error {
 	return nil
 }
 
-func (s *Session) hear(w io.Writer) error {
-	b := kamune.NewBytes(nil)
-	err := s.transport.Receive(&b)
+func (s *Chat) hear(w io.Writer) error {
+	b := stp.Bytes(nil)
+	metadata, err := s.transport.Receive(b)
 	if err != nil {
 		switch {
 		case errors.Is(err, io.EOF):
@@ -57,20 +56,25 @@ func (s *Session) hear(w io.Writer) error {
 		}
 	}
 	fmt.Fprint(w, "\033[2K\r")
-	fmt.Fprintf(w, "Peer: %s\n> ", b.Data.Bytes)
+	fmt.Fprintf(
+		w,
+		"[%s] Peer: %s\n> ",
+		metadata.Timestamp().Local().Format(time.DateTime),
+		b.Value,
+	)
 
 	return nil
 }
 
-func (s *Session) Chat() {
+func (s *Chat) Start() {
 	errs := s.chat(os.Stdin, os.Stdout)
 	for err := range errs {
 		slog.Error("chat", slog.Any("error", err))
 	}
 }
 
-func (s *Session) chat(src io.Reader, dst io.Writer) <-chan error {
-	fmt.Fprintln(dst, "Happy chatting!")
+func (s *Chat) chat(src io.Reader, dst io.Writer) <-chan error {
+	fmt.Fprintf(dst, "Session ID is %s. Happy chatting!\n", s.transport.SessionID())
 	errs := make(chan error)
 	go func() {
 		for {

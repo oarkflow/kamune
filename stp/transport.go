@@ -9,7 +9,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/hossein1376/kamune"
 	"github.com/hossein1376/kamune/enigma"
 	"github.com/hossein1376/kamune/internal/attest"
 	"github.com/hossein1376/kamune/internal/box/pb"
@@ -19,107 +18,122 @@ const (
 	maxTransportSize = 10 * 1024
 )
 
-type (
-	box      = pb.Box
-	metadata = pb.Metadata
+var (
+	ErrInvalidSignature   = errors.New("invalid signature")
+	ErrInvalidSeqNumber   = errors.New("invalid message sequence number")
+	ErrVerificationFailed = errors.New("verification failed")
 )
 
 type Transport struct {
-	conn     Conn
-	attest   *attest.Attest
-	remote   *attest.PublicKey
-	encoder  *enigma.Enigma
-	decoder  *enigma.Enigma
-	sent     atomic.Uint64
-	received atomic.Uint64
+	*plainTransport
+	sessionID string
+	encoder   *enigma.Enigma
+	decoder   *enigma.Enigma
 }
 
-var (
-	ErrInvalidSignature = errors.New("invalid signature")
-)
+func newTransport(
+	pt *plainTransport,
+	sessionID string,
+	encoder, decoder *enigma.Enigma,
+) *Transport {
+	return &Transport{
+		plainTransport: pt,
+		sessionID:      sessionID,
+		encoder:        encoder,
+		decoder:        decoder,
+	}
+}
 
-func (t *Transport) Receive(dst kamune.Transferable) error {
-	seq := t.received.Add(1)
+func (t *Transport) Receive(dst Transferable) (*Metadata, error) {
+	seqNum := t.received.Load()
 	payload, err := read(t.conn)
 	if err != nil {
-		return fmt.Errorf("reading payload: %w", err)
+		return nil, fmt.Errorf("reading payload: %w", err)
 	}
-	decrypted, err := t.decoder.Decrypt(payload, seq)
+	decrypted, err := t.decoder.Decrypt(payload, seqNum)
 	if err != nil {
-		return fmt.Errorf("decrypting: %w", err)
+		return nil, fmt.Errorf("decrypting: %w", err)
 	}
-	var bx box
-	if err = deserialize(decrypted, &bx, t.remote); err != nil {
-		return fmt.Errorf("deserializing: %w", err)
+	meta, err := t.deserialize(decrypted, dst, seqNum)
+	if err != nil {
+		return nil, fmt.Errorf("deserializing: %w", err)
 	}
-	if err := bx.GetMessage().UnmarshalTo(dst); err != nil {
-		return fmt.Errorf("unmarshaling: %w", err)
-	}
+	t.received.Add(1)
 
-	return nil
+	return meta, nil
 }
 
-func (t *Transport) Send(message kamune.Transferable) error {
-	msg, err := anypb.New(message)
+func (t *Transport) Send(message Transferable) (*Metadata, error) {
+	seqNum := t.sent.Load()
+	payload, metadata, err := t.serialize(message, seqNum)
 	if err != nil {
-		return fmt.Errorf("constructing anypb: %w", err)
+		return nil, err
 	}
-	bx := &box{
-		Message:  msg,
-		Metadata: &metadata{Sequence: t.sent.Load(), Timestamp: timestamppb.Now()},
-	}
-	payload, err := serialize(bx, t.attest)
-	if err != nil {
-		return err
-	}
-	encrypted := t.encoder.Encrypt(payload, t.sent.Add(1))
+	encrypted := t.encoder.Encrypt(payload, seqNum)
 	if _, err := t.conn.Write(encrypted); err != nil {
-		return fmt.Errorf("writing: %w", err)
+		return nil, fmt.Errorf("writing: %w", err)
 	}
+	t.sent.Add(1)
 
-	return nil
+	return metadata, nil
 }
 
 func (t *Transport) Close() error {
 	return t.conn.Close()
 }
 
-func serialize(
-	message kamune.Transferable, at *attest.Attest,
-) ([]byte, error) {
-	msg, err := proto.Marshal(message)
-	if err != nil {
-		return nil, fmt.Errorf("marshalling message: %w", err)
-	}
-	sig, err := at.Sign(msg)
-	if err != nil {
-		return nil, fmt.Errorf("signing: %w", err)
-	}
-	st := &pb.SignedTransport{Data: msg, Signature: sig}
-	payload, err := proto.Marshal(st)
-	if err != nil {
-		return nil, fmt.Errorf("marshalling transport: %w", err)
-	}
-
-	return payload, nil
+func (t *Transport) SessionID() string {
+	return t.sessionID
 }
 
-func deserialize(
-	payload []byte, dst kamune.Transferable, remote *attest.PublicKey,
-) error {
-	var st pb.SignedTransport
-	if err := proto.Unmarshal(payload, &st); err != nil {
-		return fmt.Errorf("unmarshal transport: %w", err)
+type plainTransport struct {
+	conn     Conn
+	sent     atomic.Uint64
+	received atomic.Uint64
+	attest   *attest.Attest
+	remote   *attest.PublicKey
+}
+
+func (pt *plainTransport) serialize(
+	msg Transferable, seq uint64,
+) ([]byte, *Metadata, error) {
+	message, err := anypb.New(msg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshalling message: %w", err)
 	}
-	msg := st.GetData()
-	if !attest.Verify(remote, msg, st.Signature) {
-		return ErrInvalidSignature
+	sig, err := pt.attest.Sign(message.Value)
+	if err != nil {
+		return nil, nil, fmt.Errorf("signing: %w", err)
 	}
-	if err := proto.Unmarshal(msg, dst); err != nil {
-		return fmt.Errorf("unmarshal transport: %w", err)
+	md := &pb.Metadata{Sequence: seq, Timestamp: timestamppb.Now()}
+	st := &pb.SignedTransport{Data: message, Signature: sig, Metadata: md}
+	payload, err := proto.Marshal(st)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshalling transport: %w", err)
 	}
 
-	return nil
+	return payload, &Metadata{md}, nil
+}
+
+func (pt *plainTransport) deserialize(
+	payload []byte, dst Transferable, seq uint64,
+) (*Metadata, error) {
+	var st pb.SignedTransport
+	if err := proto.Unmarshal(payload, &st); err != nil {
+		return nil, fmt.Errorf("unmarshal transport: %w", err)
+	}
+	if st.GetMetadata().GetSequence() != seq {
+		return nil, ErrInvalidSeqNumber
+	}
+	msg := st.GetData()
+	if !attest.Verify(pt.remote, msg.Value, st.Signature) {
+		return nil, ErrInvalidSignature
+	}
+	if err := msg.UnmarshalTo(dst); err != nil {
+		return nil, fmt.Errorf("unmarshal transport: %w", err)
+	}
+
+	return &Metadata{st.GetMetadata()}, nil
 }
 
 func read(c Conn) ([]byte, error) {
@@ -129,19 +143,4 @@ func read(c Conn) ([]byte, error) {
 		return nil, err
 	}
 	return buf[:n], nil
-}
-
-func newTransport(
-	at *attest.Attest,
-	remote *attest.PublicKey,
-	encoder, decoder *enigma.Enigma,
-	c Conn,
-) *Transport {
-	return &Transport{
-		attest:  at,
-		remote:  remote,
-		encoder: encoder,
-		decoder: decoder,
-		conn:    c,
-	}
 }

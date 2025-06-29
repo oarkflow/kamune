@@ -10,9 +10,9 @@ import (
 	"github.com/hossein1376/kamune/internal/box/pb"
 )
 
-type IntroductionHandler func(key *attest.PublicKey) (err error)
+type RemoteVerifier func(key *attest.PublicKey) (err error)
 
-func defaultIntroductionHandler(remote *attest.PublicKey) error {
+func defaultRemoteVerifier(remote *attest.PublicKey) error {
 	key := base64.StdEncoding.EncodeToString(remote.Marshal())
 	fmt.Printf("Make sure to verify peer's public key: %s\n", key)
 	return nil
