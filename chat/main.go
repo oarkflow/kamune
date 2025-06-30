@@ -11,7 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hossein1376/kamune/stp"
+	"github.com/hossein1376/kamune"
 )
 
 var errCh = make(chan error)
@@ -19,7 +19,7 @@ var stop = make(chan struct{})
 
 type Program struct {
 	*tea.Program
-	transport *stp.Transport
+	transport *kamune.Transport
 }
 
 func NewProgram(p *tea.Program) *Program {
@@ -52,7 +52,7 @@ func main() {
 	}
 }
 
-func serveHandler(t *stp.Transport) error {
+func serveHandler(t *kamune.Transport) error {
 	p := NewProgram(tea.NewProgram(initialModel(t), tea.WithAltScreen()))
 	go func() {
 		if _, err := p.Run(); err != nil {
@@ -62,10 +62,10 @@ func serveHandler(t *stp.Transport) error {
 	}()
 
 	for {
-		b := stp.Bytes(nil)
+		b := kamune.Bytes(nil)
 		metadata, err := t.Receive(b)
 		if err != nil {
-			if errors.Is(err, stp.ErrConnClosedByRemote) {
+			if errors.Is(err, kamune.ErrConnClosedByRemote) {
 				p.Quit()
 				return nil
 			}
@@ -77,7 +77,7 @@ func serveHandler(t *stp.Transport) error {
 }
 
 func server(addr string) {
-	srv, err := stp.NewServer(addr, serveHandler)
+	srv, err := kamune.NewServer(addr, serveHandler)
 	if err != nil {
 		errCh <- fmt.Errorf("starting server: %w", err)
 		return
@@ -86,11 +86,11 @@ func server(addr string) {
 }
 
 func client(addr string) {
-	var t *stp.Transport
+	var t *kamune.Transport
 	for {
 		var opErr *net.OpError
 		var err error
-		t, err = stp.Dial(addr)
+		t, err = kamune.Dial(addr)
 		if err == nil {
 			break
 		}
@@ -112,10 +112,10 @@ func client(addr string) {
 	}()
 
 	for {
-		b := stp.Bytes(nil)
+		b := kamune.Bytes(nil)
 		metadata, err := t.Receive(b)
 		if err != nil {
-			if errors.Is(err, stp.ErrConnClosedByRemote) {
+			if errors.Is(err, kamune.ErrConnClosedByRemote) {
 				p.Quit()
 				return
 			}

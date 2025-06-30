@@ -1,8 +1,11 @@
-package stp
+package kamune
 
 import (
+	"bufio"
 	"encoding/base64"
 	"fmt"
+	"os"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -14,18 +17,37 @@ type RemoteVerifier func(key *attest.PublicKey) (err error)
 
 func defaultRemoteVerifier(remote *attest.PublicKey) error {
 	key := base64.StdEncoding.EncodeToString(remote.Marshal())
+	keyBytes := []byte(key)
 	fmt.Printf("Peer's public key: %s\n", key)
-	fmt.Printf("Do you verify it (y/N)? ")
-	var answer string
-	fmt.Scanln(&answer)
-	if answer == "y" || answer == "yes" {
-		return nil
+	known := isPeerKnown(keyBytes)
+	if !known {
+		fmt.Println("Peer is not known. They will be added to the trusted list if you continue.")
 	}
-	return ErrVerificationFailed
+	fmt.Printf("Proceed? (y/N)? ")
+
+	b := bufio.NewScanner(os.Stdin)
+	b.Scan()
+	answer := strings.TrimSpace(strings.ToLower(b.Text()))
+	if !(answer == "y" || answer == "yes") {
+		return ErrVerificationFailed
+	}
+
+	if !known {
+		if err := trustPeer(keyBytes); err != nil {
+			fmt.Printf("Error adding peer to the trusted list: %s\n", err)
+			return nil
+		}
+		fmt.Println("Peer was added to the trusted list.")
+	}
+
+	return nil
 }
 
 func sendIntroduction(conn Conn, at *attest.Attest) error {
-	intro := &pb.Introduce{Public: at.MarshalPublicKey(), Padding: padding()}
+	intro := &pb.Introduce{
+		Public:  at.MarshalPublicKey(),
+		Padding: padding(introducePadding),
+	}
 	introBytes, err := proto.Marshal(intro)
 	if err != nil {
 		return fmt.Errorf("marshal host intoduce message: %w", err)

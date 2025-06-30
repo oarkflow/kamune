@@ -1,4 +1,4 @@
-package stp
+package kamune
 
 import (
 	"errors"
@@ -16,7 +16,9 @@ import (
 
 const (
 	maxTransportSize = 10 * 1024
-	maxPaddingSize   = 64
+	introducePadding = 512
+	messagePadding   = 128
+	handshakePadding = 32
 )
 
 var (
@@ -116,7 +118,7 @@ func (pt *plainTransport) serialize(
 		Data:      message,
 		Signature: sig,
 		Metadata:  md,
-		Padding:   padding(),
+		Padding:   padding(messagePadding),
 	}
 	payload, err := proto.Marshal(st)
 	if err != nil {

@@ -1,19 +1,12 @@
-package stp
+package kamune
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
-	"path/filepath"
 
 	"github.com/hossein1376/kamune/internal/attest"
-)
-
-var (
-	defaultIdentityDir  = filepath.Join(os.Getenv("HOME"), ".config", "kamune")
-	defaultIdentityPath = filepath.Join(defaultIdentityDir, "id.key")
 )
 
 type HandlerFunc func(t *Transport) error
@@ -99,7 +92,7 @@ func (s *Server) log(lvl slog.Level, msg string, args ...any) {
 }
 
 func NewServer(addr string, h HandlerFunc) (*Server, error) {
-	at, err := loadCert()
+	at, err := attest.LoadFromDisk(privKeyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -111,34 +104,17 @@ func NewServer(addr string, h HandlerFunc) (*Server, error) {
 	}, nil
 }
 
-func loadCert() (*attest.Attest, error) {
-	id, err := attest.LoadFromDisk(defaultIdentityPath)
-	if err != nil {
-		switch {
-		case errors.Is(err, attest.ErrMissingFile):
-			id, err = newCert()
-			if err != nil {
-				return nil, fmt.Errorf("newCert: %w", err)
-			}
-		default:
-			return nil, fmt.Errorf("loading cert: %w", err)
-		}
-	}
-
-	return id, nil
-}
-
-func newCert() (*attest.Attest, error) {
-	if err := os.MkdirAll(defaultIdentityDir, 0760); err != nil {
-		return nil, fmt.Errorf("MkdirAll: %w", err)
+func newCert() error {
+	if err := os.MkdirAll(baseDir, 0700); err != nil {
+		return fmt.Errorf("MkdirAll: %w", err)
 	}
 	id, err := attest.New()
 	if err != nil {
-		return nil, fmt.Errorf("new attest: %w", err)
+		return fmt.Errorf("new attest: %w", err)
 	}
-	if err := id.Save(defaultIdentityPath); err != nil {
-		return nil, fmt.Errorf("saving cert: %w", err)
+	if err := id.Save(privKeyPath); err != nil {
+		return fmt.Errorf("saving cert: %w", err)
 	}
 
-	return id, nil
+	return nil
 }

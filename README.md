@@ -11,7 +11,7 @@ suite.
 - Key derivation via **HKDF-SHA512** (HMAC-based extract-and-expand)
 - End-to-End, bidirectional symmetric encryption using **ChaCha20-Poly1305**
 - **Replay attack protection** via message sequence numbering
-- Lightweight, custom **TCP-based protocol (STP)** for minimal overhead
+- Lightweight, custom **TCP-based protocol** for minimal overhead
 - **Real-time, instant messaging** over socket-based connection
 - **Direct peer-to-peer communication**, no intermediary server required
 - **Protobuf** for fast, compact binary message encoding

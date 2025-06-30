@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hossein1376/kamune/stp"
+	"github.com/hossein1376/kamune"
 )
 
 const gap = "\n\n"
@@ -28,10 +28,10 @@ type model struct {
 	peerPrefix lipgloss.Style
 	peerText   lipgloss.Style
 	err        error
-	transport  *stp.Transport
+	transport  *kamune.Transport
 }
 
-func initialModel(t *stp.Transport) model {
+func initialModel(t *kamune.Transport) model {
 	ta := textarea.New()
 	ta.Placeholder = "Send a message..."
 	ta.Focus()
@@ -107,7 +107,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case tea.KeyEnter:
 			text := m.textarea.Value()
-			metadata, err := m.transport.Send(stp.Bytes([]byte(text)))
+			metadata, err := m.transport.Send(kamune.Bytes([]byte(text)))
 			if err != nil {
 				m.err = err
 				return m, tiCmd

@@ -1,4 +1,4 @@
-package stp
+package kamune
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ func requestHandshake(pt *plainTransport) (*Transport, error) {
 	req := &pb.Handshake{
 		Key:     ml.PublicKey.Bytes(),
 		Nonce:   nonce,
-		Padding: padding(),
+		Padding: padding(handshakePadding),
 	}
 	reqBytes, _, err := pt.serialize(req, pt.sent.Load())
 	if err != nil {
@@ -94,7 +94,7 @@ func acceptHandshake(pt *plainTransport) (*Transport, error) {
 		Key:       ct,
 		Nonce:     nonce,
 		SessionID: &sessionID,
-		Padding:   padding(),
+		Padding:   padding(handshakePadding),
 	}
 	respBytes, _, err := pt.serialize(resp, pt.sent.Load())
 	if err != nil {
@@ -161,6 +161,6 @@ func randomBytes(l int) []byte {
 	return rnd
 }
 
-func padding() []byte {
-	return randomBytes(mathrand.IntN(maxPaddingSize))
+func padding(maxSize int) []byte {
+	return randomBytes(mathrand.IntN(maxSize))
 }

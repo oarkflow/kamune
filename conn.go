@@ -1,4 +1,4 @@
-package stp
+package kamune
 
 import (
 	"errors"

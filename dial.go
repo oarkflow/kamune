@@ -1,9 +1,11 @@
-package stp
+package kamune
 
 import (
 	"fmt"
 	"log/slog"
 	"net"
+
+	"github.com/hossein1376/kamune/internal/attest"
 )
 
 type dialer struct {
@@ -31,7 +33,7 @@ func (d *dialer) dial() (*Transport, error) {
 			d.log(slog.LevelError, "dial panic", slog.Any("err", err))
 		}
 	}()
-	at, err := loadCert()
+	at, err := attest.LoadFromDisk(privKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading certificate: %w", err)
 	}
