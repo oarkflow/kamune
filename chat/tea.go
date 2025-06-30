@@ -129,7 +129,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.GotoBottom()
 		}
 
-	case PeerMessage:
+	case Message:
 		m.messages = append(
 			m.messages,
 			m.peerPrefix.Render(msg.prefix)+m.peerText.Render(msg.text),
@@ -141,7 +141,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 		m.viewport.GotoBottom()
 
-	// We handle errors just like any other message
 	case errMsg:
 		m.err = msg
 		return m, nil

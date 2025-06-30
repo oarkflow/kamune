@@ -3,14 +3,15 @@ package stp
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sync/atomic"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/hossein1376/kamune/enigma"
 	"github.com/hossein1376/kamune/internal/attest"
 	"github.com/hossein1376/kamune/internal/box/pb"
+	"github.com/hossein1376/kamune/internal/enigma"
 )
 
 const (
@@ -22,6 +23,7 @@ var (
 	ErrInvalidSignature   = errors.New("invalid signature")
 	ErrInvalidSeqNumber   = errors.New("invalid message sequence number")
 	ErrVerificationFailed = errors.New("verification failed")
+	ErrConnClosedByRemote = errors.New("peer has closed the connection")
 )
 
 type Transport struct {
@@ -47,7 +49,11 @@ func newTransport(
 func (t *Transport) Receive(dst Transferable) (*Metadata, error) {
 	seqNum := t.received.Load()
 	payload, err := read(t.conn)
-	if err != nil {
+	switch {
+	case err == nil:
+	case errors.Is(err, io.EOF):
+		return nil, ErrConnClosedByRemote
+	default:
 		return nil, fmt.Errorf("reading payload: %w", err)
 	}
 	decrypted, err := t.decoder.Decrypt(payload, seqNum)

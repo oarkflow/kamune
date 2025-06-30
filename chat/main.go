@@ -1,15 +1,11 @@
 package main
 
-// A simple program demonstrating the text area component from the Bubbles
-// component library.
-
 import (
 	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"syscall"
 	"time"
 
@@ -18,10 +14,8 @@ import (
 	"github.com/hossein1376/kamune/stp"
 )
 
-var (
-	errCh = make(chan error)
-	stop  = make(chan struct{}, 2)
-)
+var errCh = make(chan error)
+var stop = make(chan struct{})
 
 type Program struct {
 	*tea.Program
@@ -38,8 +32,6 @@ func main() {
 		return
 	}
 
-	exitCh := make(chan os.Signal, 1)
-	signal.Notify(exitCh, syscall.SIGINT, syscall.SIGTERM)
 	switch addr := args[1]; args[0] {
 	case "dial":
 		go func() {
@@ -56,8 +48,7 @@ func main() {
 	select {
 	case err := <-errCh:
 		fmt.Println("error:", err)
-	case <-exitCh:
-		fmt.Println("program exited")
+	case <-stop:
 	}
 }
 
@@ -67,21 +58,21 @@ func serveHandler(t *stp.Transport) error {
 		if _, err := p.Run(); err != nil {
 			panic(err)
 		}
+		stop <- struct{}{}
 	}()
 
 	for {
-		select {
-		case <-stop:
-			return nil
-		default:
-			b := stp.Bytes(nil)
-			metadata, err := t.Receive(b)
-			if err != nil {
-				errCh <- fmt.Errorf("receiving: %w", err)
-				continue
+		b := stp.Bytes(nil)
+		metadata, err := t.Receive(b)
+		if err != nil {
+			if errors.Is(err, stp.ErrConnClosedByRemote) {
+				p.Quit()
+				return nil
 			}
-			p.Send(NewPeerMessage(metadata.Timestamp(), b.Value))
+			errCh <- fmt.Errorf("receiving: %w", err)
+			return nil
 		}
+		p.Send(NewMessage(metadata.Timestamp(), b.Value))
 	}
 }
 
@@ -117,31 +108,31 @@ func client(addr string) {
 		if _, err := p.Run(); err != nil {
 			errCh <- err
 		}
+		stop <- struct{}{}
 	}()
 
 	for {
-		select {
-		case <-stop:
-			return
-		default:
-			b := stp.Bytes(nil)
-			metadata, err := t.Receive(b)
-			if err != nil {
-				errCh <- fmt.Errorf("receiving: %w", err)
+		b := stp.Bytes(nil)
+		metadata, err := t.Receive(b)
+		if err != nil {
+			if errors.Is(err, stp.ErrConnClosedByRemote) {
+				p.Quit()
 				return
 			}
-			p.Send(NewPeerMessage(metadata.Timestamp(), b.Value))
+			errCh <- fmt.Errorf("receiving: %w", err)
+			return
 		}
+		p.Send(NewMessage(metadata.Timestamp(), b.Value))
 	}
 }
 
-type PeerMessage struct {
+type Message struct {
 	prefix string
 	text   string
 }
 
-func NewPeerMessage(timestamp time.Time, text []byte) PeerMessage {
-	return PeerMessage{
+func NewMessage(timestamp time.Time, text []byte) Message {
+	return Message{
 		prefix: fmt.Sprintf("[%s] Peer: ", timestamp.Format(time.DateTime)),
 		text:   string(text),
 	}

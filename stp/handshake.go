@@ -6,8 +6,8 @@ import (
 	"fmt"
 	mathrand "math/rand/v2"
 
-	"github.com/hossein1376/kamune/enigma"
 	"github.com/hossein1376/kamune/internal/box/pb"
+	"github.com/hossein1376/kamune/internal/enigma"
 	"github.com/hossein1376/kamune/internal/exchange"
 )
 
@@ -162,7 +162,5 @@ func randomBytes(l int) []byte {
 }
 
 func padding() []byte {
-	r := mathrand.IntN(maxPaddingSize)
-	fmt.Println(r)
-	return randomBytes(r)
+	return randomBytes(mathrand.IntN(maxPaddingSize))
 }
