@@ -4,6 +4,9 @@ Secure communication over untrusted networks.
 Kamune provides `Ed25519_ML-KEM-768_HKDF_SHA512_ChaCha20-Poly1305` security
 suite.
 
+![demo](.assets/demo.gif)
+
+
 ## Features
 
 - Message signing and verification using **Ed25519**
