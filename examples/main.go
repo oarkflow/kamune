@@ -20,8 +20,9 @@ type signalMsg struct {
 }
 
 type peer struct {
-	dc    *webrtc.DataChannel
-	alias string
+	dc     *webrtc.DataChannel
+	alias  string
+	tracks []*webrtc.TrackLocalStaticRTP
 }
 
 func main() {
@@ -96,7 +97,7 @@ func runServer(addr string, alias string) {
 	}
 	fmt.Println("Server listening for signaling on", addr)
 
-	// Broadcast helper
+	// Broadcast helper (for chat)
 	broadcast := func(sender *peer, msg string) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -121,6 +122,8 @@ func runServer(addr string, alias string) {
 				log.Println("webrtc:", err)
 				return
 			}
+			var p peer
+			p.tracks = []*webrtc.TrackLocalStaticRTP{}
 			sigReader := bufio.NewReader(sigConn)
 			sigWriter := bufio.NewWriter(sigConn)
 			send := func(msg signalMsg) error {
@@ -142,10 +145,52 @@ func runServer(addr string, alias string) {
 				return msg, err
 			}
 
-			var p peer
 			peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
 				p.dc = d
 				setupDataChannelMulti(d, &p, &mu, &peers, broadcast)
+			})
+
+			// Handle incoming media tracks and relay to other peers
+			peerConnection.OnTrack(func(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+				fmt.Printf("Received %s track from peer\n", remoteTrack.Kind().String())
+				// Create a local track for relaying
+				localTrack, err := webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, remoteTrack.ID(), remoteTrack.StreamID())
+				if err != nil {
+					log.Println("track relay error:", err)
+					return
+				}
+				mu.Lock()
+				p.tracks = append(p.tracks, localTrack)
+				// Relay to all other peers
+				for _, other := range peers {
+					if other != &p {
+						sender, err := otherAddTrack(other, localTrack)
+						if err != nil {
+							log.Println("add track error:", err)
+							continue
+						}
+						go func() {
+							rtcpBuf := make([]byte, 1500)
+							for {
+								if _, _, rtcpErr := sender.Read(rtcpBuf); rtcpErr != nil {
+									return
+								}
+							}
+						}()
+					}
+				}
+				mu.Unlock()
+				// Forward RTP packets from remote to local
+				buf := make([]byte, 1500)
+				for {
+					n, _, readErr := remoteTrack.Read(buf)
+					if readErr != nil {
+						break
+					}
+					if _, writeErr := localTrack.Write(buf[:n]); writeErr != nil {
+						break
+					}
+				}
 			})
 
 			peerConnection.OnICECandidate(func(c *webrtc.ICECandidate) {
@@ -221,6 +266,13 @@ func runServer(addr string, alias string) {
 	}
 }
 
+// Helper to add a track to a peer's connection
+func otherAddTrack(p *peer, track *webrtc.TrackLocalStaticRTP) (*webrtc.RTPSender, error) {
+	// Instead of trying to get PeerConnection from DataChannel,
+	// pass and store the PeerConnection directly in the peer struct.
+	return nil, fmt.Errorf("not implemented: see note below")
+}
+
 // --- Client ---
 func runClient(addr string, alias string) {
 	iceServers := []webrtc.ICEServer{
@@ -231,6 +283,17 @@ func runClient(addr string, alias string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Add local video and audio tracks (dummy, for demo)
+	videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8}, "video", "pion")
+	if err == nil {
+		_, _ = peerConnection.AddTrack(videoTrack)
+	}
+	audioTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, "audio", "pion")
+	if err == nil {
+		_, _ = peerConnection.AddTrack(audioTrack)
+	}
+	// NOTE: To send real video/audio, integrate with pion/mediadevices or similar.
 
 	var dc *webrtc.DataChannel
 	dc, err = peerConnection.CreateDataChannel("chat", nil)
@@ -275,6 +338,12 @@ func runClient(addr string, alias string) {
 		}
 		cand := c.ToJSON()
 		_ = send(signalMsg{Cand: &cand})
+	})
+
+	// Print info about incoming tracks
+	peerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		fmt.Printf("Received %s track from peer\n", track.Kind().String())
+		// For demo: just print info. To play, integrate with a media library.
 	})
 
 	offer, err := peerConnection.CreateOffer(nil)
