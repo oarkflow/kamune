@@ -21,7 +21,7 @@ var motto = [][]byte{
 func requestHandshake(pt *plainTransport) (*Transport, error) {
 	ml, err := exchange.NewMLKEM()
 	if err != nil {
-		return nil, fmt.Errorf("creating MLKEM: %w", err)
+		return nil, fmt.Errorf("creating MLKEM keys: %w", err)
 	}
 	nonce := randomBytes(enigma.BaseNonceSize)
 	req := &pb.Handshake{
@@ -31,20 +31,20 @@ func requestHandshake(pt *plainTransport) (*Transport, error) {
 	}
 	reqBytes, _, err := pt.serialize(req, pt.sent.Load())
 	if err != nil {
-		return nil, fmt.Errorf("serializing handshake req: %w", err)
+		return nil, fmt.Errorf("serializing handshake request: %w", err)
 	}
 	if _, err = pt.conn.Write(reqBytes); err != nil {
-		return nil, fmt.Errorf("writing handshake req: %w", err)
+		return nil, fmt.Errorf("writing handshake request: %w", err)
 	}
 	pt.sent.Add(1)
 
 	respBytes, err := read(pt.conn)
 	if err != nil {
-		return nil, fmt.Errorf("reading handshake resp: %w", err)
+		return nil, fmt.Errorf("reading handshake response: %w", err)
 	}
 	var resp pb.Handshake
 	if _, err = pt.deserialize(respBytes, &resp, pt.received.Load()); err != nil {
-		return nil, fmt.Errorf("deserializing handshake resp: %w", err)
+		return nil, fmt.Errorf("deserializing handshake response: %w", err)
 	}
 	pt.received.Add(1)
 	secret, err := ml.Decapsulate(resp.GetKey())
@@ -75,17 +75,17 @@ func requestHandshake(pt *plainTransport) (*Transport, error) {
 func acceptHandshake(pt *plainTransport) (*Transport, error) {
 	reqBytes, err := read(pt.conn)
 	if err != nil {
-		return nil, fmt.Errorf("reading handshake req: %w", err)
+		return nil, fmt.Errorf("reading handshake request: %w", err)
 
 	}
 	var req pb.Handshake
 	if _, err = pt.deserialize(reqBytes, &req, pt.received.Load()); err != nil {
-		return nil, fmt.Errorf("deserializing handshake req: %w", err)
+		return nil, fmt.Errorf("deserializing handshake request: %w", err)
 	}
 	pt.received.Add(1)
 	secret, ct, err := exchange.EncapsulateMLKEM(req.GetKey())
 	if err != nil {
-		return nil, fmt.Errorf("encapsulating: %w", err)
+		return nil, fmt.Errorf("encapsulating key: %w", err)
 	}
 
 	sessionID := rand.Text()
@@ -98,10 +98,10 @@ func acceptHandshake(pt *plainTransport) (*Transport, error) {
 	}
 	respBytes, _, err := pt.serialize(resp, pt.sent.Load())
 	if err != nil {
-		return nil, fmt.Errorf("serializing handshake resp: %w", err)
+		return nil, fmt.Errorf("serializing handshake response: %w", err)
 	}
 	if _, err = pt.conn.Write(respBytes); err != nil {
-		return nil, fmt.Errorf("writing handshake resp: %w", err)
+		return nil, fmt.Errorf("writing handshake response: %w", err)
 	}
 	pt.sent.Add(1)
 

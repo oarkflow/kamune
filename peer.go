@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/hossein1376/kamune/internal/attest"
 )
 
 var baseDir, privKeyPath string
@@ -62,6 +64,21 @@ func trustPeer(peer []byte) error {
 	defer f.Close()
 	if _, err := f.Write(append(peer, '\n')); err != nil {
 		return fmt.Errorf("writing to file: %w", err)
+	}
+
+	return nil
+}
+
+func newCert() error {
+	if err := os.MkdirAll(baseDir, 0700); err != nil {
+		return fmt.Errorf("MkdirAll: %w", err)
+	}
+	id, err := attest.New()
+	if err != nil {
+		return fmt.Errorf("new attest: %w", err)
+	}
+	if err := id.Save(privKeyPath); err != nil {
+		return fmt.Errorf("saving cert: %w", err)
 	}
 
 	return nil

@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	ErrAlreadyClosed = errors.New("conn has already been closed")
+	ErrAlreadyClosed = errors.New("connection has already been closed")
 )
 
 type Conn struct {

@@ -50,10 +50,10 @@ func sendIntroduction(conn Conn, at *attest.Attest) error {
 	}
 	introBytes, err := proto.Marshal(intro)
 	if err != nil {
-		return fmt.Errorf("marshal host intoduce message: %w", err)
+		return fmt.Errorf("marshalling: %w", err)
 	}
 	if _, err := conn.Write(introBytes); err != nil {
-		return fmt.Errorf("writing intro: %w", err)
+		return fmt.Errorf("writing: %w", err)
 	}
 
 	return nil
@@ -61,10 +61,13 @@ func sendIntroduction(conn Conn, at *attest.Attest) error {
 
 func receiveIntroduction(conn Conn) (*attest.PublicKey, error) {
 	payload, err := read(conn)
+	if err != nil {
+		return nil, fmt.Errorf("reading payload: %w", err)
+	}
 	var introduce pb.Introduce
 	err = proto.Unmarshal(payload, &introduce)
 	if err != nil {
-		return nil, fmt.Errorf("deserializing intoduce message: %w", err)
+		return nil, fmt.Errorf("deserializing: %w", err)
 	}
 	remote, err := attest.ParsePublicKey(introduce.GetPublic())
 	if err != nil {

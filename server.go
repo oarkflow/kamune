@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
 
 	"github.com/hossein1376/kamune/internal/attest"
 )
@@ -21,7 +20,7 @@ type Server struct {
 func ListenAndServe(addr string, h HandlerFunc) error {
 	s, err := NewServer(addr, h)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating new server: %w", err)
 	}
 	return s.ListenAndServe()
 }
@@ -29,7 +28,7 @@ func ListenAndServe(addr string, h HandlerFunc) error {
 func (s *Server) ListenAndServe() error {
 	l, err := net.Listen("tcp", s.Addr)
 	if err != nil {
-		return err
+		return fmt.Errorf("listening on %s: %w", s.Addr, err)
 	}
 	return s.Serve(l)
 }
@@ -43,7 +42,7 @@ func (s *Server) Serve(l net.Listener) error {
 		}
 		go func() {
 			if err := s.serve(conn); err != nil {
-				s.log(slog.LevelError, "serve conn", slog.Any("err", err))
+				s.log(slog.LevelWarn, "serve conn", slog.Any("err", err))
 				return
 			}
 		}()
@@ -91,7 +90,7 @@ func (s *Server) log(lvl slog.Level, msg string, args ...any) {
 	slog.Log(nil, lvl, msg, args...)
 }
 
-func NewServer(addr string, h HandlerFunc) (*Server, error) {
+func NewServer(addr string, handler HandlerFunc) (*Server, error) {
 	at, err := attest.LoadFromDisk(privKeyPath)
 	if err != nil {
 		return nil, err
@@ -99,22 +98,7 @@ func NewServer(addr string, h HandlerFunc) (*Server, error) {
 	return &Server{
 		attest:         at,
 		Addr:           addr,
-		HandlerFunc:    h,
+		HandlerFunc:    handler,
 		RemoteVerifier: defaultRemoteVerifier,
 	}, nil
-}
-
-func newCert() error {
-	if err := os.MkdirAll(baseDir, 0700); err != nil {
-		return fmt.Errorf("MkdirAll: %w", err)
-	}
-	id, err := attest.New()
-	if err != nil {
-		return fmt.Errorf("new attest: %w", err)
-	}
-	if err := id.Save(privKeyPath); err != nil {
-		return fmt.Errorf("saving cert: %w", err)
-	}
-
-	return nil
 }

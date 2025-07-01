@@ -75,7 +75,7 @@ func (t *Transport) Send(message Transferable) (*Metadata, error) {
 	seqNum := t.sent.Load()
 	payload, metadata, err := t.serialize(message, seqNum)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("serializing: %w", err)
 	}
 	encrypted := t.encoder.Encrypt(payload, seqNum)
 	if _, err := t.conn.Write(encrypted); err != nil {
@@ -133,7 +133,7 @@ func (pt *plainTransport) deserialize(
 ) (*Metadata, error) {
 	var st pb.SignedTransport
 	if err := proto.Unmarshal(payload, &st); err != nil {
-		return nil, fmt.Errorf("unmarshal transport: %w", err)
+		return nil, fmt.Errorf("unmarshalling transport: %w", err)
 	}
 	if st.GetMetadata().GetSequence() != seq {
 		return nil, ErrInvalidSeqNumber
@@ -143,7 +143,7 @@ func (pt *plainTransport) deserialize(
 		return nil, ErrInvalidSignature
 	}
 	if err := proto.Unmarshal(msg, dst); err != nil {
-		return nil, fmt.Errorf("unmarshal transport: %w", err)
+		return nil, fmt.Errorf("unmarshalling message: %w", err)
 	}
 
 	return &Metadata{st.GetMetadata()}, nil

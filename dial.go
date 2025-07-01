@@ -13,8 +13,8 @@ type dialer struct {
 	verifyRemote RemoteVerifier
 }
 
-func newDialer(conn net.Conn, intro RemoteVerifier) *dialer {
-	return &dialer{conn: Conn{Conn: conn}, verifyRemote: intro}
+func newDialer(conn net.Conn, verifier RemoteVerifier) *dialer {
+	return &dialer{conn: Conn{Conn: conn}, verifyRemote: verifier}
 }
 
 func Dial(addr string) (*Transport, error) {

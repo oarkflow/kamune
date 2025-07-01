@@ -1,3 +1,4 @@
+// Package kamune provides secure communication over untrusted networks.
 package kamune
 
 import (

@@ -2,6 +2,7 @@ package attest
 
 import (
 	"crypto"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -17,7 +18,7 @@ type Attest struct {
 }
 
 func New() (*Attest, error) {
-	public, private, err := ed25519.GenerateKey(nil)
+	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
 	}

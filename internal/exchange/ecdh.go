@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"fmt"
-
-	"github.com/hossein1376/kamune/internal/attest"
 )
 
 type ECDH struct {
@@ -29,7 +27,7 @@ func (e *ECDH) Exchange(remote []byte) ([]byte, error) {
 	}
 	pub, ok := key.(*ecdh.PublicKey)
 	if !ok {
-		return nil, attest.ErrInvalidKey
+		return nil, ErrInvalidKey
 	}
 	secret, err := e.privateKey.ECDH(pub)
 	if err != nil {
@@ -42,7 +40,7 @@ func (e *ECDH) Exchange(remote []byte) ([]byte, error) {
 func NewECDH() (*ECDH, error) {
 	key, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("ecdh: generating key: %w", err)
+		return nil, err
 	}
 
 	return &ECDH{privateKey: key, PublicKey: key.PublicKey()}, nil
